@@ -353,7 +353,10 @@ VRT_IP_string(VRT_CTX, VCL_IP ip)
 		return (NULL);
 	}
 	p = ctx->ws->f;
-	VTCP_name(ip, p, len, NULL, 0);
+	if (VSA_Get_Proto(ip) != PF_UNIX)
+		VTCP_name(ip, p, len, NULL, 0);
+	else
+		strcpy(p, VSA_Path(ip));
 	WS_Release(ctx->ws, strlen(p) + 1);
 	return (p);
 }
