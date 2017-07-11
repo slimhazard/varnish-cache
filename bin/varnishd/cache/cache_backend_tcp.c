@@ -54,6 +54,8 @@ struct tcp_pool {
 	char			*name;
 	struct suckaddr		*ip4;
 	struct suckaddr		*ip6;
+	struct suckaddr		*uds;
+	const void		*uds_sockaddr;
 
 	VTAILQ_ENTRY(tcp_pool)	list;
 	int			refcnt;
@@ -117,36 +119,43 @@ tcp_handle(struct waited *w, enum wait_event ev, double now)
 }
 
 /*--------------------------------------------------------------------
- * Reference a TCP pool given by {ip4, ip6} pair.  Create if it
- * doesn't exist already.
+ * Reference a TCP pool given by a {ip4, ip6} pair or by a UDS.  Create if
+ * it doesn't exist already.
  */
 
 struct tcp_pool *
-VBT_Ref(const struct suckaddr *ip4, const struct suckaddr *ip6)
+VBT_Ref(const struct suckaddr *ip4, const struct suckaddr *ip6,
+	const struct suckaddr *uds)
 {
 	struct tcp_pool *tp;
+	socklen_t sl;
 
 	Lck_Lock(&pools_mtx);
 	VTAILQ_FOREACH(tp, &pools, list) {
 		assert(tp->refcnt > 0);
-		if (ip4 == NULL) {
-			if (tp->ip4 != NULL)
-				continue;
-		} else {
-			if (tp->ip4 == NULL)
-				continue;
-			if (VSA_Compare(ip4, tp->ip4))
-				continue;
-		}
-		if (ip6 == NULL) {
-			if (tp->ip6 != NULL)
-				continue;
-		} else {
-			if (tp->ip6 == NULL)
-				continue;
-			if (VSA_Compare(ip6, tp->ip6))
-				continue;
-		}
+		if (uds == NULL) {
+			if (ip4 == NULL) {
+				if (tp->ip4 != NULL)
+					continue;
+			} else {
+				if (tp->ip4 == NULL)
+					continue;
+				if (VSA_Compare(ip4, tp->ip4))
+					continue;
+			}
+			if (ip6 == NULL) {
+				if (tp->ip6 != NULL)
+					continue;
+			} else {
+				if (tp->ip6 == NULL)
+					continue;
+				if (VSA_Compare(ip6, tp->ip6))
+					continue;
+			}
+		} else if (tp->uds == NULL)
+			continue;
+		else if (VSA_Compare(uds, tp->uds))
+			continue;
 		tp->refcnt++;
 		Lck_Unlock(&pools_mtx);
 		return (tp);
@@ -155,10 +164,16 @@ VBT_Ref(const struct suckaddr *ip4, const struct suckaddr *ip6)
 
 	ALLOC_OBJ(tp, TCP_POOL_MAGIC);
 	AN(tp);
-	if (ip4 != NULL)
-		tp->ip4 = VSA_Clone(ip4);
-	if (ip6 != NULL)
-		tp->ip6 = VSA_Clone(ip6);
+	if (uds != NULL) {
+		tp->uds = VSA_Clone(uds);
+		tp->uds_sockaddr = VSA_Get_Sockaddr(uds, &sl);
+	}
+	else {
+		if (ip4 != NULL)
+			tp->ip4 = VSA_Clone(ip4);
+		if (ip6 != NULL)
+			tp->ip6 = VSA_Clone(ip6);
+	}
 	tp->refcnt = 1;
 	Lck_New(&tp->mtx, lck_backend_tcp);
 	VTAILQ_INIT(&tp->connlist);
@@ -196,6 +211,8 @@ VBT_Rel(struct tcp_pool **tpp)
 	free(tp->name);
 	free(tp->ip4);
 	free(tp->ip6);
+	free((void *) tp->uds_sockaddr);
+	free(tp->uds);
 	Lck_Lock(&tp->mtx);
 	VTAILQ_FOREACH_SAFE(vbc, &tp->connlist, list, vbc2) {
 		VTAILQ_REMOVE(&tp->connlist, vbc, list);
@@ -233,6 +250,11 @@ VBT_Open(const struct tcp_pool *tp, double tmo, const struct suckaddr **sa)
 	CHECK_OBJ_NOTNULL(tp, TCP_POOL_MAGIC);
 
 	msec = (int)floor(tmo * 1000.0);
+	if (tp->uds != NULL) {
+		*sa = tp->uds;
+		s = VTCP_connect(tp->uds, msec);
+		return (s);
+	}
 	if (cache_param->prefer_ipv6) {
 		*sa = tp->ip6;
 		s = VTCP_connect(tp->ip6, msec);

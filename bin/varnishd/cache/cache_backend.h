@@ -41,6 +41,7 @@ struct vbp_target;
 struct vrt_ctx;
 struct vrt_backend_probe;
 struct tcp_pool;
+struct suckaddr;
 
 /*--------------------------------------------------------------------
  * An instance of a backend from a VCL program.
@@ -57,6 +58,9 @@ struct backend {
 	struct lock		mtx;
 
 	VRT_BACKEND_FIELDS()
+
+	struct suckaddr		*uds_suckaddr;
+	const void		*uds_addr;
 
 	struct vcl		*vcl;
 	char			*display_name;
@@ -120,8 +124,8 @@ void VBP_Control(const struct backend *b, int stop);
 void VBP_Status(struct cli *cli, const struct backend *, int details);
 
 /* cache_backend_tcp.c */
-struct tcp_pool *VBT_Ref(const struct suckaddr *ip4,
-    const struct suckaddr *ip6);
+struct tcp_pool *VBT_Ref(const struct suckaddr *ip4, const struct suckaddr *ip6,
+			 const struct suckaddr *uds);
 void VBT_Rel(struct tcp_pool **tpp);
 int VBT_Open(const struct tcp_pool *tp, double tmo, const struct suckaddr **sa);
 void VBT_Recycle(const struct worker *, struct tcp_pool *, struct vbc **);
