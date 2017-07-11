@@ -42,6 +42,8 @@
 #include "vcli_serve.h"
 #include "vrt.h"
 #include "vtim.h"
+#include "vsa.h"
+#include "vss.h"
 
 #include "cache_director.h"
 #include "cache_backend.h"
@@ -57,6 +59,20 @@ static const char * const vbe_ah_healthy	= "healthy";
 static const char * const vbe_ah_sick		= "sick";
 static const char * const vbe_ah_probe		= "probe";
 static const char * const vbe_ah_deleted	= "deleted";
+
+static int __match_proto__(vss_resolved_f)
+uds_callback(void *priv, const struct suckaddr *sa)
+{
+	struct backend *b;
+	unsigned sl;
+
+	CAST_OBJ_NOTNULL(b, priv, BACKEND_MAGIC);
+	b->uds_suckaddr = VSA_Clone(sa);
+	AN(b->uds_suckaddr);
+	b->uds_addr = VSA_Get_Sockaddr(b->uds_suckaddr, &sl);
+	AN(b->uds_addr);
+	return(0);
+}
 
 /*--------------------------------------------------------------------
  * Create a new static or dynamic director::backend instance.
@@ -75,7 +91,12 @@ VRT_new_backend(VRT_CTX, const struct vrt_backend *vrt)
 
 	CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
 	CHECK_OBJ_NOTNULL(vrt, VRT_BACKEND_MAGIC);
-	assert(vrt->ipv4_suckaddr != NULL || vrt->ipv6_suckaddr != NULL);
+	if (vrt->path == NULL)
+		assert(vrt->ipv4_suckaddr != NULL
+		       || vrt->ipv6_suckaddr != NULL);
+	else
+		assert(vrt->ipv4_suckaddr == NULL
+		       && vrt->ipv6_suckaddr == NULL);
 
 	vcl = ctx->vcl;
 	AN(vcl);
@@ -84,6 +105,20 @@ VRT_new_backend(VRT_CTX, const struct vrt_backend *vrt)
 	/* Create new backend */
 	ALLOC_OBJ(b, BACKEND_MAGIC);
 	XXXAN(b);
+
+	if (vrt->path != NULL) {
+		int error;
+		const char *err = NULL;
+
+		error = VSS_unix(vrt->path, uds_callback, b, &err);
+		if (error) {
+			AN(error);
+			VRT_fail(ctx, "%s: %s", vrt->path, err);
+			FREE_OBJ(b);
+			return (NULL);
+		}
+	}
+
 	Lck_New(&b->mtx, lck_backend);
 
 #define DA(x)	do { if (vrt->x != NULL) REPLACE((b->x), (vrt->x)); } while (0)
@@ -114,9 +149,11 @@ VRT_new_backend(VRT_CTX, const struct vrt_backend *vrt)
 	Lck_Lock(&backends_mtx);
 	VTAILQ_INSERT_TAIL(&backends, b, list);
 	VSC_C_main->n_backend++;
-	b->tcp_pool = VBT_Ref(vrt->ipv4_suckaddr, vrt->ipv6_suckaddr);
+	b->tcp_pool = VBT_Ref(vrt->ipv4_suckaddr, vrt->ipv6_suckaddr,
+			      b->uds_suckaddr);
 	if (vbp != NULL) {
-		tp = VBT_Ref(vrt->ipv4_suckaddr, vrt->ipv6_suckaddr);
+		tp = VBT_Ref(vrt->ipv4_suckaddr, vrt->ipv6_suckaddr,
+			     b->uds_suckaddr);
 		assert(b->tcp_pool == tp);
 	}
 	Lck_Unlock(&backends_mtx);
@@ -230,6 +267,10 @@ VBE_Delete(struct backend *be)
 #undef DN
 
 	free(be->display_name);
+	free((void *)be->uds_addr);
+	free(be->uds_suckaddr);
+	be->uds_addr = NULL;
+	be->uds_suckaddr = NULL;
 	AZ(be->vsc);
 	Lck_Delete(&be->mtx);
 	FREE_OBJ(be);

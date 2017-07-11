@@ -293,6 +293,8 @@ void Resolve_Sockaddr(struct vcc *tl, const char *host, const char *defport,
     const char **ipv4, const char **ipv4_ascii, const char **ipv6,
     const char **ipv6_ascii, const char **p_ascii, int maxips,
     const struct token *t_err, const char *errid);
+void Emit_Sockaddr_Un(struct vcc *tl, const struct token *t_path,
+		      const char *errid);
 
 /* vcc_storage.c */
 void vcc_stevedore(struct vcc *vcc, const char *stv_name);
