@@ -39,6 +39,7 @@
 #include "vrt.h"
 #include "vtcp.h"
 #include "vtim.h"
+#include "vsa.h"
 
 #include "cache_director.h"
 #include "cache_backend.h"
@@ -114,10 +115,15 @@ vbe_dir_getfd(struct worker *wrk, struct backend *bp, struct busyobj *bo)
 	if (bp->proxy_header != 0)
 		VPX_Send_Proxy(vbc->fd, bp->proxy_header, bo->sp);
 
-	VTCP_myname(vbc->fd, abuf1, sizeof abuf1, pbuf1, sizeof pbuf1);
-	VTCP_hisname(vbc->fd, abuf2, sizeof abuf2, pbuf2, sizeof pbuf2);
-	VSLb(bo->vsl, SLT_BackendOpen, "%d %s %s %s %s %s",
-	    vbc->fd, bp->display_name, abuf2, pbuf2, abuf1, pbuf1);
+	if (VSA_Get_Proto(vbc->addr) == PF_UNIX)
+		VSLb(bo->vsl, SLT_BackendOpen, "%d %s %s", vbc->fd,
+		     bp->display_name, VSA_Path(vbc->addr));
+	else {
+		VTCP_myname(vbc->fd, abuf1, sizeof abuf1, pbuf1, sizeof pbuf1);
+		VTCP_hisname(vbc->fd, abuf2, sizeof abuf2, pbuf2, sizeof pbuf2);
+		VSLb(bo->vsl, SLT_BackendOpen, "%d %s %s %s %s %s",
+		     vbc->fd, bp->display_name, abuf2, pbuf2, abuf1, pbuf1);
+	}
 
 	INIT_OBJ(bo->htc, HTTP_CONN_MAGIC);
 	bo->htc->priv = vbc;
