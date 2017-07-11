@@ -48,6 +48,7 @@
 #include "vcl.h"
 #include "vsha256.h"
 #include "vtim.h"
+#include "vsa.h"
 
 /*--------------------------------------------------------------------
  * Handle "Expect:" and "Connection:" on incoming request
@@ -755,6 +756,8 @@ cnt_recv(struct worker *wrk, struct req *req)
 	struct SHA256Context sha256ctx;
 	const char *xff;
 	const char *ci, *cp;
+	struct suckaddr *sac;
+	int proto;
 
 	CHECK_OBJ_NOTNULL(wrk, WORKER_MAGIC);
 	CHECK_OBJ_NOTNULL(req, REQ_MAGIC);
@@ -766,13 +769,19 @@ cnt_recv(struct worker *wrk, struct req *req)
 	AZ(isnan(req->t_prev));
 	AZ(isnan(req->t_req));
 
-	ci = SES_Get_String_Attr(req->sp, SA_CLIENT_IP);
-	cp = SES_Get_String_Attr(req->sp, SA_CLIENT_PORT);
-	VSLb(req->vsl, SLT_ReqStart, "%s %s", ci, cp);
+	AZ(SES_Get_client_addr(req->sp, &sac));
+	proto = VSA_Get_Proto(sac);
+	if (proto != PF_UNIX) {
+		ci = SES_Get_String_Attr(req->sp, SA_CLIENT_IP);
+		cp = SES_Get_String_Attr(req->sp, SA_CLIENT_PORT);
+		VSLb(req->vsl, SLT_ReqStart, "%s %s", ci, cp);
+	}
+	else
+		VSLb(req->vsl, SLT_ReqStart, "%s -", VSA_Path(sac));
 
 	http_VSL_log(req->http);
 
-	if (req->restarts == 0) {
+	if (req->restarts == 0 && proto != PF_UNIX) {
 		/*
 		 * This really should be done earlier, but we want to capture
 		 * it in the VSL log.
