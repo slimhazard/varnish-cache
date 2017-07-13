@@ -33,6 +33,7 @@ struct vsmw;
 struct suckaddr;
 struct listen_sock;
 struct transport;
+struct uds_perms;
 
 struct listen_arg {
 	unsigned			magic;
@@ -42,6 +43,7 @@ struct listen_arg {
 	const char			*name;
 	VTAILQ_HEAD(,listen_sock)	socks;
 	const struct transport		*transport;
+	const struct uds_perms		*perms;
 };
 
 struct listen_sock {
@@ -54,6 +56,7 @@ struct listen_sock {
 	const char			*name;
 	struct suckaddr			*addr;
 	const struct transport		*transport;
+	const struct uds_perms		*perms;
 };
 
 VTAILQ_HEAD(listen_sock_head, listen_sock);
