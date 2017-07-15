@@ -203,6 +203,15 @@ sp_variables = [
 		connection was received.
 		"""
 	),
+	('local.path',
+		'STRING',
+		('both',),
+		(), """
+		The socket path at which a client request was
+		received, if it is a Unix domain socket. NULL
+		if the request was received at an IP address.
+		"""
+	),
 	('server.hostname',
 		'STRING',
 		('all',),
