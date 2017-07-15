@@ -53,8 +53,15 @@ VCL_VOID __match_proto__(td_std_set_ip_tos)
 vmod_set_ip_tos(VRT_CTX, VCL_INT tos)
 {
 	int itos = tos;
+	struct suckaddr *sa;
 
 	CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
+	AZ(SES_Get_local_addr(ctx->req->sp, &sa));
+	if (VSA_Get_Proto(sa) == PF_UNIX) {
+		VRT_fail(ctx, "std.set_ip_tos() cannot be applied to a Unix "
+			 "domain socket");
+		return;
+	}
 	VTCP_Assert(setsockopt(ctx->req->sp->fd,
 	    IPPROTO_IP, IP_TOS, &itos, sizeof(itos)));
 }
