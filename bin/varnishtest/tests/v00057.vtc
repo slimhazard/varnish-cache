@@ -3,11 +3,9 @@ varnishtest "local.path"
 server s1 {
 	rxreq
 	txresp
-	rxreq
-	txresp
 } -start
 
-varnish v1 -arg "-a ${tmpdir}/v1.sock" -vcl+backend {
+varnish v1 -vcl+backend {
 
 	sub vcl_backend_response {
 		set beresp.http.b-path = local.path;
@@ -26,9 +24,24 @@ client c1 {
 	expect resp.http.c-path == ""
 } -run
 
-client c1 -connect "${tmpdir}/v1.sock" {
+varnish v1 -stop
+server s1 -start
+
+varnish v2 -arg "-a ${tmpdir}/v2.sock" -vcl+backend {
+
+	sub vcl_backend_response {
+		set beresp.http.b-path = local.path;
+	}
+
+	sub vcl_deliver {
+		set resp.http.c-path = local.path;
+	}
+
+} -start
+
+client c1 -connect "${tmpdir}/v2.sock" {
 	txreq
 	rxresp
-	expect resp.http.b-path == "${tmpdir}/v1.sock"
-	expect resp.http.c-path == "${tmpdir}/v1.sock"
+	expect resp.http.b-path == "${tmpdir}/v2.sock"
+	expect resp.http.c-path == "${tmpdir}/v2.sock"
 } -run
