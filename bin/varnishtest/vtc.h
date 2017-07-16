@@ -64,6 +64,12 @@ struct cmds {
 	cmd_f		*cmd;
 };
 
+enum sock_e {
+	IP,
+	UDS_CONNECT,
+	UDS_LISTEN
+};
+
 void parse_string(const char *spec, const struct cmds *cmd, void *priv,
     struct vtclog *vl);
 int fail_out(void);
@@ -92,7 +98,8 @@ extern int feature_dns;
 
 void init_server(void);
 
-int http_process(struct vtclog *vl, const char *spec, int sock, int *sfd);
+int http_process(struct vtclog *vl, const char *spec, int sock, int *sfd,
+		 enum sock_e stype);
 
 char * synth_body(const char *len, int rnd);
 
