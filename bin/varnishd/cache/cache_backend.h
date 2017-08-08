@@ -60,7 +60,7 @@ struct backend {
 	VRT_BACKEND_FIELDS()
 
 	struct suckaddr		*uds_suckaddr;
-	const void		*uds_addr;
+	void			*uds_addr;
 
 	struct vcl		*vcl;
 	char			*display_name;
