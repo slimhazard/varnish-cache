@@ -186,7 +186,7 @@ vmod_dyn_refresh(VRT_CTX, struct vmod_debug_dyn *dyn,
 	dyn_dir_init(ctx, dyn, addr, port);
 }
 
-int
+static int
 dyn_uds_init(VRT_CTX, struct vmod_debug_dyn_uds *uds, VCL_STRING path)
 {
 	struct director *dir, *dir2;

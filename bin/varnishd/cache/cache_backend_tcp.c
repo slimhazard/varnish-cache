@@ -55,7 +55,7 @@ struct tcp_pool {
 	struct suckaddr		*ip4;
 	struct suckaddr		*ip6;
 	struct suckaddr		*uds;
-	const void		*uds_sockaddr;
+	void			*uds_sockaddr;
 
 	VTAILQ_ENTRY(tcp_pool)	list;
 	int			refcnt;
@@ -138,6 +138,7 @@ VBT_Ref(const struct suckaddr *ip4, const struct suckaddr *ip6,
 	const struct suckaddr *uds)
 {
 	struct tcp_pool *tp;
+	const void *uds_addr;
 	socklen_t sl;
 
 	assert(uds != NULL || ip4 != NULL || ip6 != NULL);
@@ -157,8 +158,13 @@ VBT_Ref(const struct suckaddr *ip4, const struct suckaddr *ip6,
 	ALLOC_OBJ(tp, TCP_POOL_MAGIC);
 	AN(tp);
 	if (uds != NULL) {
-		tp->uds = VSA_Clone(uds);
-		tp->uds_sockaddr = VSA_Get_Sockaddr(uds, &sl);
+		uds_addr = VSA_Get_Sockaddr(uds, &sl);
+		AN(uds_addr);
+		tp->uds_sockaddr = malloc(sl);
+		AN(tp->uds_sockaddr);
+		memcpy(tp->uds_sockaddr, uds_addr, sl);
+		tp->uds = VSA_Malloc(tp->uds_sockaddr, 0, tp->uds_sockaddr);
+		AN(tp->uds);
 	}
 	else {
 		if (ip4 != NULL)
@@ -203,7 +209,7 @@ VBT_Rel(struct tcp_pool **tpp)
 	free(tp->name);
 	free(tp->ip4);
 	free(tp->ip6);
-	free((void *) tp->uds_sockaddr);
+	free(tp->uds_sockaddr);
 	free(tp->uds);
 	Lck_Lock(&tp->mtx);
 	VTAILQ_FOREACH_SAFE(vbc, &tp->connlist, list, vbc2) {
