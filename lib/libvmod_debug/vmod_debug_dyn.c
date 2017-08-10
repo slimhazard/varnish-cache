@@ -229,7 +229,7 @@ dyn_uds_init(VRT_CTX, struct vmod_debug_dyn_uds *uds, VCL_STRING path)
 	return (0);
 }
 
-VCL_VOID
+VCL_VOID __match_proto__(td_debug_dyn_uds__init)
 vmod_dyn_uds__init(VRT_CTX, struct vmod_debug_dyn_uds **udsp,
 		   const char *vcl_name, VCL_STRING path)
 {
@@ -254,8 +254,8 @@ vmod_dyn_uds__init(VRT_CTX, struct vmod_debug_dyn_uds **udsp,
 	*udsp = uds;
 }
 
-VCL_VOID
-vmod_dyn_uds__fini(struct vmod_debug_dyn_uds **udsp)
+VCL_VOID __match_proto__(td_debug_dyn_uds__fini)
+vmod_dyn_uds__fini(struct vmod_debug_dyn_uds ** const udsp)
 {
 	struct vmod_debug_dyn_uds *uds;
 
@@ -266,10 +266,10 @@ vmod_dyn_uds__fini(struct vmod_debug_dyn_uds **udsp)
 	free(uds->vcl_name);
 	AZ(pthread_mutex_destroy(&uds->mtx));
 	FREE_OBJ(uds);
-	udsp = NULL;
+	*udsp = NULL;
 }
 
-VCL_BACKEND
+VCL_BACKEND __match_proto__(td_debug_dyn_uds_backend)
 vmod_dyn_uds_backend(VRT_CTX, struct vmod_debug_dyn_uds *uds)
 {
 	CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
@@ -278,7 +278,7 @@ vmod_dyn_uds_backend(VRT_CTX, struct vmod_debug_dyn_uds *uds)
 	return (uds->dir);
 }
 
-VCL_VOID
+VCL_VOID __match_proto__(td_debug_dyn_uds_refresh)
 vmod_dyn_uds_refresh(VRT_CTX, struct vmod_debug_dyn_uds *uds, VCL_STRING path)
 {
 	CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
