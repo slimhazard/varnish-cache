@@ -116,7 +116,7 @@ vbe_dir_getfd(struct worker *wrk, struct backend *bp, struct busyobj *bo)
 		VPX_Send_Proxy(vbc->fd, bp->proxy_header, bo->sp);
 
 	if (VSA_Get_Proto(vbc->addr) == PF_UNIX)
-		VSLb(bo->vsl, SLT_BackendOpen, "%d %s %s", vbc->fd,
+		VSLb(bo->vsl, SLT_BackendOpen, "%d %s %s - - -", vbc->fd,
 		     bp->display_name, VSA_Path(vbc->addr));
 	else {
 		VTCP_myname(vbc->fd, abuf1, sizeof abuf1, pbuf1, sizeof pbuf1);
