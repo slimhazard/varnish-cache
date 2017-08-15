@@ -777,7 +777,7 @@ cnt_recv(struct worker *wrk, struct req *req)
 		VSLb(req->vsl, SLT_ReqStart, "%s %s", ci, cp);
 	}
 	else
-		VSLb(req->vsl, SLT_ReqStart, "%s", VSA_Path(sac));
+		VSLb(req->vsl, SLT_ReqStart, "%s -", VSA_Path(sac));
 
 	http_VSL_log(req->http);
 
