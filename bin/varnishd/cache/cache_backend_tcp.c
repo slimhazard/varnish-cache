@@ -123,6 +123,16 @@ tcp_handle(struct waited *w, enum wait_event ev, double now)
  * it doesn't exist already.
  */
 
+static int
+vbt_differ(const struct suckaddr *a, const struct suckaddr *b)
+{
+	if (a == NULL && b == NULL)
+		return (0);
+	if (a == NULL || b == NULL)
+		return (1);
+	return (VSA_Compare(a, b));
+}
+
 struct tcp_pool *
 VBT_Ref(const struct suckaddr *ip4, const struct suckaddr *ip6,
 	const struct suckaddr *uds)
@@ -134,28 +144,9 @@ VBT_Ref(const struct suckaddr *ip4, const struct suckaddr *ip6,
 	Lck_Lock(&pools_mtx);
 	VTAILQ_FOREACH(tp, &pools, list) {
 		assert(tp->refcnt > 0);
-		if (uds == NULL) {
-			if (ip4 == NULL) {
-				if (tp->ip4 != NULL)
-					continue;
-			} else {
-				if (tp->ip4 == NULL)
-					continue;
-				if (VSA_Compare(ip4, tp->ip4))
-					continue;
-			}
-			if (ip6 == NULL) {
-				if (tp->ip6 != NULL)
-					continue;
-			} else {
-				if (tp->ip6 == NULL)
-					continue;
-				if (VSA_Compare(ip6, tp->ip6))
-					continue;
-			}
-		} else if (tp->uds == NULL)
-			continue;
-		else if (VSA_Compare(uds, tp->uds))
+		if (vbt_differ(uds, tp->uds) ||
+		    vbt_differ(ip4, tp->ip4) ||
+		    vbt_differ(ip6, tp->ip6))
 			continue;
 		tp->refcnt++;
 		Lck_Unlock(&pools_mtx);
