@@ -87,25 +87,26 @@ static struct tcp_opt {
 	socklen_t	sz;
 	void		*ptr;
 	int		need;
+	int		iponly;
 } tcp_opts[] = {
-#define TCPO(lvl, nam, sz) { lvl, nam, #nam, sizeof(sz), 0, 0},
+#define TCPO(lvl, nam, sz, ip) { lvl, nam, #nam, sizeof(sz), 0, 0, ip},
 
-	TCPO(SOL_SOCKET, SO_LINGER, struct linger)
-	TCPO(SOL_SOCKET, SO_KEEPALIVE, int)
-	TCPO(IPPROTO_TCP, TCP_NODELAY, int)
+	TCPO(SOL_SOCKET, SO_LINGER, struct linger, 0)
+	TCPO(SOL_SOCKET, SO_KEEPALIVE, int, 0)
+	TCPO(IPPROTO_TCP, TCP_NODELAY, int, 1)
 
 #ifdef SO_SNDTIMEO_WORKS
-	TCPO(SOL_SOCKET, SO_SNDTIMEO, struct timeval)
+	TCPO(SOL_SOCKET, SO_SNDTIMEO, struct timeval, 0)
 #endif
 
 #ifdef SO_RCVTIMEO_WORKS
-	TCPO(SOL_SOCKET, SO_RCVTIMEO, struct timeval)
+	TCPO(SOL_SOCKET, SO_RCVTIMEO, struct timeval, 0)
 #endif
 
 #ifdef HAVE_TCP_KEEP
-	TCPO(IPPROTO_TCP, TCP_KEEPIDLE, int)
-	TCPO(IPPROTO_TCP, TCP_KEEPCNT, int)
-	TCPO(IPPROTO_TCP, TCP_KEEPINTVL, int)
+	TCPO(IPPROTO_TCP, TCP_KEEPIDLE, int, 1)
+	TCPO(IPPROTO_TCP, TCP_KEEPCNT, int, 1)
+	TCPO(IPPROTO_TCP, TCP_KEEPINTVL, int, 1)
 #endif
 
 #undef TCPO
@@ -216,8 +217,8 @@ vca_tcp_opt_test(struct listen_sock *ls)
 
 	for (n = 0; n < n_tcp_opts; n++) {
 		to = &tcp_opts[n];
-		if (to->level == IPPROTO_TCP && family == PF_UNIX)
-			continue; /* XXX */
+		if (to->iponly && family == PF_UNIX)
+			continue;
 		to->need = 1;
 		ptr = calloc(1, to->sz);
 		AN(ptr);
@@ -242,8 +243,8 @@ vca_tcp_opt_set(struct listen_sock *ls, int force)
 
 	for (n = 0; n < n_tcp_opts; n++) {
 		to = &tcp_opts[n];
-		if (to->level == IPPROTO_TCP && family == PF_UNIX)
-			continue; /* XXX */
+		if (to->iponly && family == PF_UNIX)
+			continue;
 		if (to->need || force) {
 			VTCP_Assert(setsockopt(sock,
 			    to->level, to->optname, to->ptr, to->sz));
