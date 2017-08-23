@@ -204,12 +204,15 @@ vca_tcp_opt_init(void)
 }
 
 static void
-vca_tcp_opt_test(int sock, int family)
+vca_tcp_opt_test(struct listen_sock *ls)
 {
-	int i, n;
+	int i, n, family, sock;
 	struct tcp_opt *to;
 	socklen_t l;
 	void *ptr;
+
+	sock = ls->sock;
+	family = VSA_Get_Proto(ls->addr);
 
 	for (n = 0; n < n_tcp_opts; n++) {
 		to = &tcp_opts[n];
@@ -229,10 +232,13 @@ vca_tcp_opt_test(int sock, int family)
 }
 
 static void
-vca_tcp_opt_set(int sock, int force, int family)
+vca_tcp_opt_set(struct listen_sock *ls, int force)
 {
-	int n;
+	int n, family, sock;
 	struct tcp_opt *to;
+
+	sock = ls->sock;
+	family = VSA_Get_Proto(ls->addr);
 
 	for (n = 0; n < n_tcp_opts; n++) {
 		to = &tcp_opts[n];
@@ -294,21 +300,69 @@ vca_pace_good(void)
  * Called from assigned worker thread
  */
 
+static void
+vca_mk_tcp(struct wrk_accept *wa, struct sess *sp)
+{
+	struct suckaddr *sa;
+	struct sockaddr_storage ss;
+	socklen_t sl;
+	char laddr[VTCP_ADDRBUFSIZE];
+	char lport[VTCP_PORTBUFSIZE];
+	char raddr[VTCP_ADDRBUFSIZE];
+	char rport[VTCP_PORTBUFSIZE];
+
+	SES_Reserve_remote_addr(sp, &sa);
+	AN(VSA_Build(sa, &wa->acceptaddr, wa->acceptaddrlen, NULL));
+	sp->sattr[SA_CLIENT_ADDR] = sp->sattr[SA_REMOTE_ADDR];
+
+	VTCP_name(sa, raddr, sizeof raddr, rport, sizeof rport);
+	SES_Set_String_Attr(sp, SA_CLIENT_IP, raddr);
+	SES_Set_String_Attr(sp, SA_CLIENT_PORT, rport);
+
+	sl = sizeof ss;
+	AZ(getsockname(sp->fd, (void*)&ss, &sl));
+	SES_Reserve_local_addr(sp, &sa);
+	AN(VSA_Build(sa, &ss, sl, NULL));
+	sp->sattr[SA_SERVER_ADDR] = sp->sattr[SA_LOCAL_ADDR];
+
+	VSL(SLT_Begin, sp->vxid, "sess 0 %s", wa->acceptlsock->transport->name);
+	VTCP_name(sa, laddr, sizeof laddr, lport, sizeof lport);
+
+	VSL(SLT_SessOpen, sp->vxid, "%s %s %s %s %s %.6f %d",
+	    raddr, rport,
+	    wa->acceptlsock->name != NULL ?
+	    wa->acceptlsock->name : wa->acceptlsock->endpoint,
+	    laddr, lport,
+	    sp->t_open, sp->fd);
+}
+
+static void
+vca_mk_uds(struct wrk_accept *wa, struct sess *sp)
+{
+	struct suckaddr *sa;
+	const struct sockaddr_un *suds;
+	socklen_t sl;
+
+	suds = VSA_Get_Sockaddr(wa->acceptlsock->addr, &sl);
+	SES_Reserve_remote_addr(sp, &sa);
+	AN(VSA_Build(sa, &wa->acceptaddr, wa->acceptaddrlen, suds));
+	sp->sattr[SA_CLIENT_ADDR] = sp->sattr[SA_REMOTE_ADDR];
+	sp->sattr[SA_LOCAL_ADDR] = sp->sattr[SA_REMOTE_ADDR];
+	sp->sattr[SA_SERVER_ADDR] = sp->sattr[SA_REMOTE_ADDR];
+
+	VSL(SLT_Begin, sp->vxid, "sess 0 %s", wa->acceptlsock->transport->name);
+	VSL(SLT_SessOpen, sp->vxid, "- - %s - - %.6f %d",
+	    wa->acceptlsock->name != NULL ?
+	    wa->acceptlsock->name : wa->acceptlsock->endpoint,
+	    sp->t_open, sp->fd);
+}
+
 static void __match_proto__(task_func_t)
 vca_make_session(struct worker *wrk, void *arg)
 {
 	struct sess *sp;
 	struct req *req;
 	struct wrk_accept *wa;
-	struct sockaddr_storage ss;
-	struct suckaddr *sa;
-	const struct sockaddr_un *suds = NULL;
-	socklen_t sl;
-	char laddr[VTCP_ADDRBUFSIZE];
-	char lport[VTCP_PORTBUFSIZE];
-	char raddr[VTCP_ADDRBUFSIZE];
-	char rport[VTCP_PORTBUFSIZE];
-	int proto;
 
 	CHECK_OBJ_NOTNULL(wrk, WORKER_MAGIC);
 	CAST_OBJ_NOTNULL(wa, arg, WRK_ACCEPT_MAGIC);
@@ -346,48 +400,12 @@ vca_make_session(struct worker *wrk, void *arg)
 	sp->fd = wa->acceptsock;
 	wa->acceptsock = -1;
 
-	proto = VSA_Get_Proto(wa->acceptlsock->addr);
-	if (proto == PF_UNIX)
-		suds = VSA_Get_Sockaddr(wa->acceptlsock->addr, &sl);
-
 	assert(wa->acceptaddrlen <= vsa_suckaddr_len);
-	SES_Reserve_remote_addr(sp, &sa);
-	AN(VSA_Build(sa, &wa->acceptaddr, wa->acceptaddrlen, suds));
-	sp->sattr[SA_CLIENT_ADDR] = sp->sattr[SA_REMOTE_ADDR];
 
-	if (VSA_Get_Proto(sa) != PF_UNIX) {
-		VTCP_name(sa, raddr, sizeof raddr, rport, sizeof rport);
-		SES_Set_String_Attr(sp, SA_CLIENT_IP, raddr);
-		SES_Set_String_Attr(sp, SA_CLIENT_PORT, rport);
-
-		sl = sizeof ss;
-		AZ(getsockname(sp->fd, (void*)&ss, &sl));
-		SES_Reserve_local_addr(sp, &sa);
-		AN(VSA_Build(sa, &ss, sl, suds));
-		sp->sattr[SA_SERVER_ADDR] = sp->sattr[SA_LOCAL_ADDR];
-	}
-	else {
-		sp->sattr[SA_LOCAL_ADDR] = sp->sattr[SA_REMOTE_ADDR];
-		sp->sattr[SA_SERVER_ADDR] = sp->sattr[SA_REMOTE_ADDR];
-	}
-
-	VSL(SLT_Begin, sp->vxid, "sess 0 %s",
-	    wa->acceptlsock->transport->name);
-	if (proto != PF_UNIX) {
-		VTCP_name(sa, laddr, sizeof laddr, lport, sizeof lport);
-
-		VSL(SLT_SessOpen, sp->vxid, "%s %s %s %s %s %.6f %d",
-		    raddr, rport,
-		    wa->acceptlsock->name != NULL ?
-		    wa->acceptlsock->name : wa->acceptlsock->endpoint,
-		    laddr, lport,
-		    sp->t_open, sp->fd);
-	}
+	if (VSA_Get_Proto(wa->acceptlsock->addr) == PF_UNIX)
+		vca_mk_uds(wa, sp);
 	else
-		VSL(SLT_SessOpen, sp->vxid, "- - %s - - %.6f %d",
-		    wa->acceptlsock->name != NULL ?
-		    wa->acceptlsock->name : wa->acceptlsock->endpoint,
-		    sp->t_open, sp->fd);
+		vca_mk_tcp(wa, sp);
 
 	WS_Release(wrk->aws, 0);
 
@@ -395,10 +413,10 @@ vca_make_session(struct worker *wrk, void *arg)
 	wrk->stats->sess_conn++;
 
 	if (need_test) {
-		vca_tcp_opt_test(sp->fd, VSA_Get_Proto(sa));
+		vca_tcp_opt_test(wa->acceptlsock);
 		need_test = 0;
 	}
-	vca_tcp_opt_set(sp->fd, 0, VSA_Get_Proto(sa));
+	vca_tcp_opt_set(wa->acceptlsock, 0);
 
 	req = Req_New(wrk, sp);
 	CHECK_OBJ_NOTNULL(req, REQ_MAGIC);
@@ -566,7 +584,7 @@ vca_acct(void *arg)
 				    ls->sock, i, strerror(errno));
 		}
 		AZ(listen(ls->sock, cache_param->listen_depth));
-		vca_tcp_opt_set(ls->sock, 1, VSA_Get_Proto(ls->addr));
+		vca_tcp_opt_set(ls, 1);
 		if (cache_param->accept_filter) {
 			int i;
 			i = VTCP_filter_http(ls->sock);
@@ -588,8 +606,7 @@ vca_acct(void *arg)
 				if (ls->sock == -2)
 					continue;	// raced VCA_Shutdown
 				assert (ls->sock > 0);
-				vca_tcp_opt_set(ls->sock,
-						1, VSA_Get_Proto(ls->addr));
+				vca_tcp_opt_set(ls, 1);
 			}
 		}
 		now = VTIM_real();
