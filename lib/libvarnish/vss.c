@@ -151,6 +151,7 @@ VSS_unix(const char *path, vss_resolved_f *func, void *priv, const char **err)
 {
 	struct sockaddr_un uds;
 	struct suckaddr *vsa;
+	void *p;
 	int ret = 0;
 
 	AN(path);
@@ -163,13 +164,12 @@ VSS_unix(const char *path, vss_resolved_f *func, void *priv, const char **err)
 	}
 	strcpy(uds.sun_path, path);
 	uds.sun_family = PF_UNIX;
-	vsa = VSA_Malloc(&uds, sizeof(uds), &uds);
-	if (vsa == NULL) {
-		*err = "Could not allocate socket address";
-		return(-1);
-	}
+	p = malloc(vsa_suckaddr_len);
+	AN(p);
+	vsa = VSA_Build_UDS(p, &uds);
+	AN(vsa);
 	if (func != NULL)
 		ret = func(priv, vsa);
-	free(vsa);
+	free(p);
 	return(ret);
 }
