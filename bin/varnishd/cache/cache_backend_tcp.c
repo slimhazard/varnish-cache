@@ -138,8 +138,6 @@ VBT_Ref(const struct suckaddr *ip4, const struct suckaddr *ip6,
 	const struct suckaddr *uds)
 {
 	struct tcp_pool *tp;
-	const void *uds_addr;
-	socklen_t sl;
 
 	assert(uds != NULL || ip4 != NULL || ip6 != NULL);
 	Lck_Lock(&pools_mtx);
@@ -158,13 +156,9 @@ VBT_Ref(const struct suckaddr *ip4, const struct suckaddr *ip6,
 	ALLOC_OBJ(tp, TCP_POOL_MAGIC);
 	AN(tp);
 	if (uds != NULL) {
-		uds_addr = VSA_Get_Sockaddr(uds, &sl);
-		AN(uds_addr);
-		tp->uds_sockaddr = malloc(sl);
-		AN(tp->uds_sockaddr);
-		memcpy(tp->uds_sockaddr, uds_addr, sl);
-		tp->uds = VSA_Malloc(tp->uds_sockaddr, 0, tp->uds_sockaddr);
+		tp->uds = VSA_Malloc_UDS(uds, &tp->uds_sockaddr);
 		AN(tp->uds);
+		AN(tp->uds_sockaddr);
 	}
 	else {
 		if (ip4 != NULL)
