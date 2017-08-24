@@ -312,25 +312,25 @@ VSA_Malloc_UDS(const struct suckaddr *uds, void **uds_sockaddr)
 
 /*
  * 'd' SHALL point to vsa_suckaddr_len aligned bytes of storage,
- * 'suds' shall point to sockaddr_un storage owned by the caller,
- * who is responsible for freeing it, 's' is a PF_UNIX sockaddr.
- * Store the suckaddr in d that points to the sockaddr_un storage,
- * and return a pointer to the suckaddr.
+ * 's' is a sockaddr_un whose storage is "owned" by the caller, who is
+ * responsible for freeing it.
+ * Store the suckaddr in d that points to the sockaddr_un storage, and
+ * return a pointer to the suckaddr.
  */
 struct suckaddr *
-VSA_Build_UDS(void *d, const void *s, const void *suds)
+VSA_Build_UDS(void *d, const void *s)
 {
 	struct suckaddr *sua = d;
-	const struct sockaddr *sa = s;
+	const struct sockaddr_un *sa = s;
 
 	AN(d);
 	AN(s);
-	assert(sa->sa_family == PF_UNIX);
+	assert(sa->sun_family == PF_UNIX);
 
 	memset(sua, 0, sizeof *sua);
 	sua->magic = SUCKADDR_MAGIC;
 	sua->sa_family = PF_UNIX;
-	sua->sa.sau = suds;
+	sua->sa.sau = sa;
 	return (sua);
 }
 
