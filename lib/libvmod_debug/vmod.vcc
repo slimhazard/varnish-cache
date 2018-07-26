@@ -177,3 +177,19 @@ Update counter
 $Function VOID vsc_destroy()
 
 Remove a vsc
+
+$Object client_caller(SUB)
+
+Create an object that can invoke a subroutine call in client context.
+
+$Method VOID .call()
+
+Invoke the subroutine given in the constructor.
+
+$Object backend_caller(SUB)
+
+Create an object that can invoke a subroutine call in backend context.
+
+$Method VOID .call()
+
+Invoke the subroutine given in the constructor.

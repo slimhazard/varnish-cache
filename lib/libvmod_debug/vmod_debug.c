@@ -430,3 +430,91 @@ xyzzy_vsc_destroy(VRT_CTX)
 	vsc = NULL;
 	AZ(pthread_mutex_unlock(&vsc_mtx));
 }
+
+struct xyzzy_debug_client_caller {
+	unsigned	magic;
+#define DEBUG_CLIENT_CALLER_MAGIC 0xd6ac2e60
+	VCL_SUB		sub;
+};
+
+VCL_VOID
+xyzzy_client_caller__init(VRT_CTX, struct xyzzy_debug_client_caller **callerp,
+			  const char *vcl_name, VCL_SUB sub)
+{
+	struct xyzzy_debug_client_caller *caller;
+
+	CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
+	AN(callerp);
+	AZ(*callerp);
+	AN(vcl_name);
+	AN(sub);
+
+	ALLOC_OBJ(caller, DEBUG_CLIENT_CALLER_MAGIC);
+	AN(caller);
+	*callerp = caller;
+	caller->sub = sub;
+}
+
+VCL_VOID
+xyzzy_client_caller__fini(struct xyzzy_debug_client_caller **callerp)
+{
+	struct xyzzy_debug_client_caller *caller;
+
+	if (callerp == NULL || *callerp == NULL)
+		return;
+	CHECK_OBJ(*callerp, DEBUG_CLIENT_CALLER_MAGIC);
+	caller = *callerp;
+	*callerp = NULL;
+	FREE_OBJ(caller);
+}
+
+VCL_VOID
+xyzzy_client_caller_call(VRT_CTX, struct xyzzy_debug_client_caller *caller)
+{
+	CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
+	VRT_Call_ClientSub(ctx, caller->sub);
+}
+
+struct xyzzy_debug_backend_caller {
+	unsigned	magic;
+#define DEBUG_BACKEND_CALLER_MAGIC 0x991695ef
+	VCL_SUB		sub;
+};
+
+VCL_VOID
+xyzzy_backend_caller__init(VRT_CTX, struct xyzzy_debug_backend_caller **callerp,
+			   const char *vcl_name, VCL_SUB sub)
+{
+	struct xyzzy_debug_backend_caller *caller;
+
+	CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
+	AN(callerp);
+	AZ(*callerp);
+	AN(vcl_name);
+	AN(sub);
+
+	ALLOC_OBJ(caller, DEBUG_BACKEND_CALLER_MAGIC);
+	AN(caller);
+	*callerp = caller;
+	caller->sub = sub;
+}
+
+VCL_VOID
+xyzzy_backend_caller__fini(struct xyzzy_debug_backend_caller **callerp)
+{
+	struct xyzzy_debug_backend_caller *caller;
+
+	if (callerp == NULL || *callerp == NULL)
+		return;
+	CHECK_OBJ(*callerp, DEBUG_BACKEND_CALLER_MAGIC);
+	caller = *callerp;
+	*callerp = NULL;
+	FREE_OBJ(caller);
+}
+
+VCL_VOID
+xyzzy_backend_caller_call(VRT_CTX, struct xyzzy_debug_backend_caller *caller)
+{
+	CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
+	VRT_Call_BackendSub(ctx, caller->sub);
+}

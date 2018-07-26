@@ -120,6 +120,7 @@ struct vcl;
 struct vmod;
 struct vmod_priv;
 struct vrt_acl;
+struct vrt_ctx;
 struct vsb;
 struct vsc_seg;
 struct vsmw_cluster;
@@ -131,6 +132,9 @@ struct strands {
 	int		n;
 	const char	**p;
 };
+
+#define VRT_CTX		const struct vrt_ctx *ctx
+typedef void vcl_func_f(VRT_CTX);
 
 /***********************************************************************
  * This is the central definition of the mapping from VCL types to
@@ -156,6 +160,7 @@ typedef double					VCL_REAL;
 typedef const struct stevedore *		VCL_STEVEDORE;
 typedef const struct strands *			VCL_STRANDS;
 typedef const char *				VCL_STRING;
+typedef vcl_func_f *				VCL_SUB;
 typedef double					VCL_TIME;
 typedef struct vcl *				VCL_VCL;
 typedef void					VCL_VOID;
@@ -208,8 +213,6 @@ struct vrt_ctx {
 	 */
 	void				*specific;
 };
-
-#define VRT_CTX		const struct vrt_ctx *ctx
 
 /***********************************************************************
  * This is the interface structure to a compiled VMOD
@@ -521,3 +524,6 @@ void VRT_VSC_Destroy(const char *, struct vsc_seg *);
 void VRT_VSC_Hide(const struct vsc_seg *);
 void VRT_VSC_Reveal(const struct vsc_seg *);
 size_t VRT_VSC_Overhead(size_t);
+
+VCL_VOID VRT_Call_BackendSub(VRT_CTX, VCL_SUB);
+VCL_VOID VRT_Call_ClientSub(VRT_CTX, VCL_SUB);

@@ -1,0 +1,127 @@
+varnishtest "test the SUB type and VRT functions"
+
+server s1 {
+	rxreq
+	txresp
+	rxreq
+	txresp
+} -start
+
+# vcc_err_unref=off is necessary because use of a VRT_SUB parameter
+# does not bump the ref count in the symbol table.
+varnish v1 -arg "-p vcc_err_unref=off" -vcl+backend {
+	import debug;
+
+	sub foo {
+		set req.http.Foo = "foo";
+	}
+
+	sub bar {
+		set beresp.http.Bar = "bar";
+	}
+
+	sub vcl_init {
+		new c = debug.client_caller(foo);
+		new b = debug.backend_caller(bar);
+	}
+
+	sub vcl_backend_response {
+		if (bereq.url == "/c_illegal") {
+			c.call();
+		}
+		else {
+			b.call();
+		}
+	}
+
+	sub vcl_recv {
+		if (req.url == "/c") {
+			c.call();
+			return (synth(200));
+		}
+		if (req.url == "/b_illegal") {
+			b.call();
+			return (synth(200));
+		}
+	}
+
+	sub vcl_synth {
+		set resp.http.Foo = req.http.Foo;
+	}
+} -start
+
+client c1 {
+	txreq -url "/c"
+	rxresp
+	expect resp.status == 200
+	expect resp.http.Foo == "foo"
+
+	txreq
+	rxresp
+	expect resp.status == 200
+	expect resp.http.Bar == "bar"
+
+	txreq -url "/b_illegal"
+	rxresp
+	expect resp.status == 503
+	expect resp.reason == "VCL failed"
+	expect resp.http.Foo == ""
+} -run
+
+logexpect l1 -v v1 -d 1 -g vxid -q VCL_Error {
+	expect * 1004	Begin
+	expect * =	VCL_Error {^Call permitted only in backend context$}
+	expect * =	End
+} -run
+
+client c1 {
+	txreq -url "/c_illegal"
+	rxresp
+	expect resp.status == 503
+	expect resp.http.Bar == <undef>
+} -run
+
+logexpect l1 -v v1 -d 1 -g vxid -q VCL_Error {
+	expect * 1007	Begin
+	expect * =	VCL_Error {^Call permitted only in client context$}
+	expect * =	End
+} -run
+
+# A subroutine must be defined before it is used as a VRT_SUB
+varnish v1 -errvcl {Symbol not found: 'foo'} {
+	import debug;
+
+	sub vcl_init {
+		new c = debug.client_caller(foo);
+	}
+
+	sub foo {
+		set req.http.Foo = "foo";
+	}
+}
+
+# Nothing prevents the illegal use of variables in the wrong context,
+# the VCC's compile-time CheckUseRecurse cannot catch it.
+varnish v1 -vcl {
+	import debug;
+	backend b { .host = "${bad_ip}"; }
+
+	sub foo {
+		# Illegal in client context
+		set bereq.http.Foo = "foo";
+	}
+
+	sub vcl_init {
+		new c = debug.client_caller(foo);
+	}
+
+	sub vcl_recv {
+		# Bogus foo invocation in client context
+		c.call();
+		return (synth(200));
+	}
+}
+
+# client c1 {
+#	txreq
+# } -run

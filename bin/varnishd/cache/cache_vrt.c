@@ -760,3 +760,30 @@ VRT_blob(VRT_CTX, const char *err, const void *src, size_t len)
 	p->priv = d;
 	return (p);
 }
+
+/*--------------------------------------------------------------------
+ */
+
+VCL_VOID
+VRT_Call_BackendSub(VRT_CTX, VCL_SUB sub)
+{
+	CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
+	if ((ctx->method & VCL_MET_TASK_B) == 0) {
+		VRT_fail(ctx, "Call permitted only in backend context");
+		return;
+	}
+	CHECK_OBJ_NOTNULL(ctx->bo, BUSYOBJ_MAGIC);
+	sub(ctx);
+}
+
+VCL_VOID
+VRT_Call_ClientSub(VRT_CTX, VCL_SUB sub)
+{
+	CHECK_OBJ_NOTNULL(ctx, VRT_CTX_MAGIC);
+	if ((ctx->method & VCL_MET_TASK_C) == 0) {
+		VRT_fail(ctx, "Call permitted only in client context");
+		return;
+	}
+	CHECK_OBJ_NOTNULL(ctx->req, REQ_MAGIC);
+	sub(ctx);
+}
