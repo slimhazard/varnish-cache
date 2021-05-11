@@ -230,6 +230,21 @@ PARAM_SIMPLE(
 )
 
 PARAM_SIMPLE(
+	/* name */	req_total_timeout,
+	/* type */	timeout,
+	/* min */	"0",
+	/* max */	NULL,
+	/* def */	"0",
+	/* units */	"seconds",
+	/* descr */
+	"Global timeout for all request/response processing intiated by "
+	"an incoming client request.\n"
+	"This is the timeout for all processing stages, including (but not "
+	"limited to) backend requests, ESI includes, restarts and retries.\n"
+	"Set to 0s to disable (default)."
+)
+
+PARAM_SIMPLE(
 	/* name */	first_byte_timeout,
 	/* type */	timeout,
 	/* min */	"0",
