@@ -872,6 +872,10 @@ cnt_recv_prep(struct req *req, const char *ci)
 		req->hash_ignore_busy = 0;
 		req->client_identity = NULL;
 		req->storage = NULL;
+		if (req->t_deadline == 0. &&
+		    cache_param->req_total_timeout > 0.)
+			req->t_deadline = VTIM_mono() +
+				cache_param->req_total_timeout;
 	}
 
 	req->is_hit = 0;
@@ -1086,6 +1090,19 @@ cnt_diag(struct req *req, const char *state)
 	VSL_Flush(req->vsl, 0);
 }
 
+static inline void
+cnt_deadline(struct req *req)
+{
+	if (req->t_deadline == 0. || VTIM_mono() <= req->t_deadline)
+		return;
+	if (req->req_step == R_STP_SYNTH || req->req_step == R_STP_TRANSMIT)
+		return;
+	VSLb_ts_req(req, "Timeout", VTIM_real());
+	VSLb(req->vsl, SLT_Error, "req_total_timeout elapsed");
+	req->err_code = 503;
+	req->req_step = R_STP_SYNTH;
+}
+
 void
 CNT_Embark(struct worker *wrk, struct req *req)
 {
@@ -1142,6 +1159,7 @@ CNT_Request(struct req *req)
 		CHECK_OBJ_ORNULL(wrk->wpriv->nobjhead, OBJHEAD_MAGIC);
 		CHECK_OBJ_NOTNULL(req, REQ_MAGIC);
 
+		cnt_deadline(req);
 		AN(req->req_step);
 		AN(req->req_step->name);
 		AN(req->req_step->func);

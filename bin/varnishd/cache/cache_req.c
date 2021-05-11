@@ -150,6 +150,7 @@ Req_New(const struct worker *wrk, struct sess *sp)
 	req->t_first = NAN;
 	req->t_prev = NAN;
 	req->t_req = NAN;
+	req->t_deadline = 0.;
 
 	req->req_step = R_STP_TRANSPORT;
 
@@ -249,6 +250,7 @@ Req_Cleanup(struct sess *sp, struct worker *wrk, struct req *req)
 	req->t_first = NAN;
 	req->t_prev = NAN;
 	req->t_req = NAN;
+	req->t_deadline = 0.;
 	req->req_body_status = NULL;
 
 	req->hash_always_miss = 0;
