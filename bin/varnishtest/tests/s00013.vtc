@@ -31,13 +31,13 @@ client c1 {
 
 logexpect l1 -v v1 -d 1 -q "Timestamp:Timeout" {
 	expect 0 *	Begin     req
-	expect * =	ReqHeader recv
+	expect * =	ReqHeader "Delay: recv"
 	expect * =	Timestamp Timeout
 	expect 0 =	Error     "req_total_timeout elapsed"
 	expect * =	End
 
 	expect 0 *	Begin     req
-	expect * =	ReqHeader hash
+	expect * =	ReqHeader "Delay: hash"
 	expect * =	Timestamp Timeout
 	expect 0 =	Error     "req_total_timeout elapsed"
 	expect * =	End
@@ -70,9 +70,15 @@ varnish v1 -vcl+backend {
 	}
 }
 
-logexpect l1 -v v1 -d 0 -q "Timestamp:Timeout" {
+logexpect l1 -v v1 -d 0 -q {Begin ~ "^bereq" and Timestamp:Timeout} {
 	expect 0 *	Begin       bereq
-	expect * =	BereqHeader fetch
+	expect * =	BereqHeader "Delay: fetch"
+	expect * =	Timestamp   Timeout
+	expect 0 =	FetchError  "req_total_timeout elapsed"
+	expect * =	End
+
+	expect 0 *	Begin       bereq
+	expect * =	BereqHeader "Delay: response"
 	expect * =	Timestamp   Timeout
 	expect 0 =	FetchError  "req_total_timeout elapsed"
 	expect * =	End
