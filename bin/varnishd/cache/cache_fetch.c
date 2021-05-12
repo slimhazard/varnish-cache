@@ -1013,6 +1013,22 @@ vbf_stp_done(struct worker *wrk, struct busyobj *bo)
 	NEEDLESS(return (F_STP_DONE));
 }
 
+static const struct fetch_step *
+vbf_deadline(struct busyobj *bo, const struct fetch_step *stp)
+{
+	if (bo->t_deadline == 0. || VTIM_mono() <= bo->t_deadline)
+		return (stp);
+	VSLb_ts_busyobj(bo, "Timeout", VTIM_real());
+	VSLb(bo->vsl, SLT_FetchError, "req_total_timeout elapsed");
+	bo->err_code = 503;
+	bo->t_deadline = 0;
+	if (stp == F_STP_ERROR || stp == F_STP_FAIL)
+		return (stp);
+	bo->htc->doclose = SC_RX_TIMEOUT;
+	vbf_cleanup(bo);
+	return (F_STP_ERROR);
+}
+
 static void v_matchproto_(task_func_t)
 vbf_fetch_thread(struct worker *wrk, void *priv)
 {
@@ -1053,6 +1069,7 @@ vbf_fetch_thread(struct worker *wrk, void *priv)
 			AN(bo->req);
 		else
 			AZ(bo->req);
+		stp = vbf_deadline(bo, stp);
 		AN(stp);
 		AN(stp->name);
 		AN(stp->func);
@@ -1129,6 +1146,7 @@ VBF_Fetch(struct worker *wrk, struct req *req, struct objcore *oc,
 
 	bo->is_hitpass = req->is_hitpass;
 	bo->is_hitmiss = req->is_hitmiss;
+	bo->t_deadline = req->t_deadline;
 
 	VSLb(bo->vsl, SLT_Begin, "bereq %u %s", VXID(req->vsl->wid), how);
 	VSLb(bo->vsl, SLT_VCL_use, "%s", VCL_Name(bo->vcl));

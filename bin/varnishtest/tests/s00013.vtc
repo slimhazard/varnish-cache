@@ -42,3 +42,50 @@ logexpect l1 -v v1 -d 1 -q "Timestamp:Timeout" {
 	expect 0 =	Error     "req_total_timeout elapsed"
 	expect * =	End
 } -run
+
+server s1 {
+	rxreq
+	txresp
+	expect_close
+
+	accept
+	rxreq
+	txresp
+} -start
+
+varnish v1 -vcl+backend {
+	import vtc;
+
+	sub vcl_backend_fetch {
+		if (bereq.http.Delay == "fetch") {
+			vtc.sleep(1.1s);
+		}
+	}
+
+	sub vcl_backend_response {
+		set beresp.do_stream = false;
+		if (bereq.http.Delay == "response") {
+			vtc.sleep(1.1s);
+		}
+	}
+}
+
+logexpect l1 -v v1 -d 0 -q "Timestamp:Timeout" {
+	expect 0 *	Begin       bereq
+	expect * =	BereqHeader fetch
+	expect * =	Timestamp   Timeout
+	expect 0 =	FetchError  "req_total_timeout elapsed"
+	expect * =	End
+} -start
+
+client c1 {
+	txreq -hdr "Delay: fetch"
+	rxresp
+	expect resp.status == 503
+
+	txreq -hdr "Delay: response"
+	rxresp
+	expect resp.status == 503
+} -run
+
+logexpect l1 -wait
