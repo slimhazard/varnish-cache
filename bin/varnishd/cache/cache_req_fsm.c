@@ -1102,7 +1102,7 @@ cnt_deadline(struct req *req)
 	req->err_code = 503;
 	req->req_step = R_STP_SYNTH;
 	if (req->objcore != NULL)
-		AZ(HSH_DerefObjCore(req->wrk, &req->objcore, 1));
+		(void)HSH_DerefObjCore(req->wrk, &req->objcore, 1);
 	if (req->stale_oc != NULL)
 		(void)HSH_DerefObjCore(req->wrk, &req->stale_oc, 0);
 	AZ(req->objcore);
