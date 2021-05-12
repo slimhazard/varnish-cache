@@ -5,21 +5,40 @@ varnish v1 -arg "-p req_total_timeout=1" -vcl {
 	backend b None;
 
 	sub vcl_recv {
-		vtc.sleep(1.1s);
+		if (req.http.Delay == "recv") {
+			vtc.sleep(1.1s);
+		}
+	}
+
+	sub vcl_hash {
+		if (req.http.Delay == "hash") {
+			vtc.sleep(1.1s);
+		}
 	}
 } -start
 
 varnish v1 -cliexpect "(?m)Value is: 1.000" "param.show req_total_timeout"
 
 client c1 {
-	txreq
+	txreq -hdr "Delay: recv"
+	rxresp
+	expect resp.status == 503
+
+	txreq -hdr "Delay: hash"
 	rxresp
 	expect resp.status == 503
 } -run
 
 logexpect l1 -v v1 -d 1 -q "Timestamp:Timeout" {
 	expect 0 *	Begin     req
+	expect * =	ReqHeader recv
 	expect * =	Timestamp Timeout
-	expect * =	Error     "req_total_timeout elapsed"
+	expect 0 =	Error     "req_total_timeout elapsed"
+	expect * =	End
+
+	expect 0 *	Begin     req
+	expect * =	ReqHeader hash
+	expect * =	Timestamp Timeout
+	expect 0 =	Error     "req_total_timeout elapsed"
 	expect * =	End
 } -run
