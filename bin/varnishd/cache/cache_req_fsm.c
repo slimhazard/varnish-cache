@@ -1095,8 +1095,7 @@ cnt_deadline(struct req *req)
 {
 	if (req->t_deadline == 0. || VTIM_mono() <= req->t_deadline)
 		return;
-	if (req->req_step == R_STP_SYNTH || req->req_step == R_STP_TRANSMIT)
-		return;
+	req->t_deadline = 0.;
 	VSLb_ts_req(req, "Timeout", VTIM_real());
 	VSLb(req->vsl, SLT_Error, "req_total_timeout elapsed");
 	req->err_code = 503;
