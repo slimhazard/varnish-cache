@@ -95,3 +95,27 @@ client c1 {
 } -run
 
 logexpect l1 -wait
+
+server s1 -wait
+server s1 {
+	rxreq
+	delay 1.1
+	txresp
+} -start
+
+varnish v1 -vcl+backend {}
+
+# XXX: may report FetchError req_total_timeout, first byte timeout, or both
+logexpect l1 -v v1 -d 0 -q FetchError {
+	expect 0 *	Begin       bereq
+	expect * =	FetchError  {^(req_total_|first byte )timeout}
+	expect * =	End
+} -start
+
+client c1 {
+	txreq
+	rxresp
+	expect resp.status == 503
+} -run
+
+logexpect l1 -wait

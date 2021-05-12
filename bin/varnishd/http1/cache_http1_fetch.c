@@ -169,6 +169,8 @@ V1F_FetchRespHdr(struct busyobj *bo)
 	struct http *hp;
 	int i;
 	double t;
+	vtim_dur deadline_timeout = 0., first_byte_timeout,
+		between_bytes_timeout;
 	struct http_conn *htc;
 	enum htc_status_e hs;
 
@@ -187,9 +189,18 @@ V1F_FetchRespHdr(struct busyobj *bo)
 	CHECK_OBJ_NOTNULL(htc, HTTP_CONN_MAGIC);
 	CHECK_OBJ_NOTNULL(bo->htc, HTTP_CONN_MAGIC);
 
-	t = VTIM_real() + htc->first_byte_timeout;
+	first_byte_timeout = htc->first_byte_timeout;
+	between_bytes_timeout = htc->between_bytes_timeout;
+	if (bo->t_deadline != 0.) {
+		deadline_timeout = bo->t_deadline - VTIM_mono();
+		if (deadline_timeout < first_byte_timeout)
+			first_byte_timeout = deadline_timeout;
+		if (deadline_timeout < between_bytes_timeout)
+			between_bytes_timeout = deadline_timeout;
+	}
+	t = VTIM_real() + first_byte_timeout;
 	hs = HTC_RxStuff(htc, HTTP1_Complete, NULL, NULL,
-	    t, NAN, htc->between_bytes_timeout, cache_param->http_resp_size);
+	    t, NAN, between_bytes_timeout, cache_param->http_resp_size);
 	if (hs != HTC_S_COMPLETE) {
 		bo->acct.beresp_hdrbytes +=
 		    htc->rxbuf_e - htc->rxbuf_b;
@@ -222,7 +233,14 @@ V1F_FetchRespHdr(struct busyobj *bo)
 		}
 		return (htc->rxbuf_e == htc->rxbuf_b ? 1 : -1);
 	}
-	VTCP_set_read_timeout(*htc->rfd, htc->between_bytes_timeout);
+	if (bo->t_deadline != 0.) {
+		deadline_timeout = bo->t_deadline - VTIM_mono();
+		if (deadline_timeout < between_bytes_timeout)
+			between_bytes_timeout = deadline_timeout;
+		if (between_bytes_timeout <= 0.)
+			between_bytes_timeout = 1e-3;
+	}
+	VTCP_set_read_timeout(*htc->rfd, between_bytes_timeout);
 
 	hp = bo->beresp;
 
