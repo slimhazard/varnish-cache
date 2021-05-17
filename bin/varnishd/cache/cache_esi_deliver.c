@@ -184,6 +184,7 @@ ved_include(struct req *preq, const char *src, const char *host,
 
 	assert(req->req_step == R_STP_TRANSPORT);
 	req->t_req = preq->t_req;
+	req->t_deadline = preq->t_deadline;
 
 	req->transport = &VED_transport;
 	req->transport_priv = ecx;
