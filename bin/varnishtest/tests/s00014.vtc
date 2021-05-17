@@ -1,0 +1,63 @@
+varnishtest "req_total_timeout elapse during restarts and retries"
+
+varnish v1 -arg "-p req_total_timeout=1 -p max_restarts=5 -p max_retries=5" -vcl {
+	import vtc;
+	backend b None;
+
+	sub vcl_recv {
+		vtc.sleep(0.3s);
+		return (restart);
+	}
+
+	sub vcl_synth {
+		set resp.http.Restarts = req.restarts;
+	}
+} -start
+
+client c1 {
+	txreq
+	rxresp
+	expect resp.status == 503
+	expect resp.http.Restarts >= 3
+	expect resp.http.Restarts < 5
+} -run
+
+logexpect l1 -v v1 -d 1 -q "Timestamp:Timeout" {
+ 	expect 0 *	Begin     {^req \d+ restart$}
+ 	expect * =	Timestamp Timeout
+ 	expect 0 =	Error     "req_total_timeout elapsed"
+ 	expect * =	End
+} -run
+
+server s1 -repeat 4 {
+	rxreq
+	delay 0.3
+	txresp
+} -start
+
+varnish v1 -vcl+backend {
+	sub vcl_backend_response {
+		return (retry);
+	}
+
+	sub vcl_backend_error {
+		set beresp.http.Retries = bereq.retries;
+	}
+}
+
+logexpect l1 -v v1 -d 0 -q "FetchError" {
+ 	expect 0 *	Begin     {^bereq \d+ retry$}
+ 	expect * =	End
+} -start
+
+client c1 {
+	txreq
+	rxresp
+	expect resp.status == 503
+	expect resp.http.Retries >= 3
+	expect resp.http.Retries < 5
+} -run
+
+server s1 -break
+
+logexpect l1 -wait
