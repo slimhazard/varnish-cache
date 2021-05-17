@@ -1,5 +1,6 @@
-varnishtest "req_total_timeout elapse during restarts and retries"
+varnishtest "req_total_timeout elapse during restarts, retries and ESI"
 
+# restarts
 varnish v1 -arg "-p req_total_timeout=1 -p max_restarts=5 -p max_retries=5" -vcl {
 	import vtc;
 	backend b None;
@@ -29,6 +30,7 @@ logexpect l1 -v v1 -d 1 -q "Timestamp:Timeout" {
  	expect * =	End
 } -run
 
+# retries
 server s1 -repeat 4 {
 	rxreq
 	delay 0.3
@@ -59,5 +61,51 @@ client c1 {
 } -run
 
 server s1 -break
+
+logexpect l1 -wait
+
+# ESI
+server s1 {
+	rxreq
+	txresp -body {
+		<html>
+		Before include
+		<esi:include src="/body"/>
+		After include
+		</html>
+	}
+	rxreq
+	delay 1.1
+	txresp -body {
+		Included file
+	}
+} -start
+
+varnish v1 -vcl+backend {
+	sub vcl_backend_response {
+		set beresp.do_esi = true;
+	}
+}
+
+logexpect l1 -v v1 -d 0 -q FetchError -g request {
+	expect * *	Begin       {^req \d+ esi}
+	expect * =	ReqURL      /body
+	expect * =	Timestamp   Timeout
+	expect * =	Error       "req_total_timeout elapsed"
+	expect * =	RespStatus  503
+	expect * =	End
+
+	expect * *	Begin       bereq
+	expect * =	BereqURL    /body
+	expect * =	Timestamp   Timeout
+	expect * =	FetchError  "req_total_timeout elapsed"
+	expect * =	BerespStatus 503
+	expect * =	End
+} -start
+
+client c1 {
+	txreq
+	rxresp
+} -run
 
 logexpect l1 -wait
