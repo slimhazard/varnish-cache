@@ -119,3 +119,29 @@ client c1 {
 } -run
 
 logexpect l1 -wait
+
+# req_total_timeout elapse during VFP execution (chunked fetch)
+server s1 -wait
+server s1 {
+	rxreq
+	txresp -nolen -hdr "Transfer-Encoding: chunked"
+	chunkedlen 10
+	delay 1.1
+	chunkedlen 10
+	chunkedlen 0
+} -start
+
+varnish v1 -vcl+backend {}
+
+logexpect l1 -v v1 -d 0 -q FetchError {
+	expect 0 *	Begin       bereq
+	expect * =	FetchError  "req_total_timeout elapsed"
+	expect * =	End
+} -start
+
+client c1 {
+	txreq
+	expect_close
+} -run
+
+logexpect l1 -wait

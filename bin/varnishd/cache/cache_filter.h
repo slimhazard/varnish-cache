@@ -82,6 +82,7 @@ struct vfp_ctx {
 	struct http		*resp;
 	struct worker		*wrk;
 	struct objcore		*oc;
+	vtim_mono		t_deadline;
 
 	struct vfp_entry_s	vfp;
 	struct vfp_entry	*vfp_nxt;

@@ -309,6 +309,7 @@ V1F_FetchRespHdr(struct busyobj *bo)
 	}
 
 	assert(bo->vfc->resp == bo->beresp);
+	bo->vfc->t_deadline = bo->t_deadline;
 	if (bo->htc->body_status != BS_NONE &&
 	    bo->htc->body_status != BS_ERROR)
 		if (V1F_Setup_Fetch(bo->vfc, bo->htc)) {
