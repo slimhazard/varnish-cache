@@ -36,6 +36,7 @@
 #include "config.h"
 
 #include "cache/cache_varnishd.h"
+#include "cache/cache_filter.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -153,6 +154,7 @@ http1_req_body(struct req *req)
 {
 
 	CHECK_OBJ_NOTNULL(req, REQ_MAGIC);
+	req->vfc->t_deadline = req->t_deadline;
 	if (V1F_Setup_Fetch(req->vfc, req->htc) != 0)
 		req->req_body_status = BS_ERROR;
 }

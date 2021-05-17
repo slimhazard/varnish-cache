@@ -45,6 +45,7 @@
 
 #include "vct.h"
 #include "vtcp.h"
+#include "vtim.h"
 
 /*--------------------------------------------------------------------
  * Read up to len bytes, returning pipelined data first.
@@ -84,7 +85,15 @@ v1f_read(const struct vfp_ctx *vc, struct http_conn *htc, void *d, ssize_t len)
 		}
 		if (i == 0)
 			htc->doclose = SC_RESP_CLOSE;
-
+		if (vc->t_deadline != 0. && VTIM_mono() > vc->t_deadline) {
+			/*
+			 * XXX: vfp_ctx does not have the fields needed
+			 * for VCLb_ts(), to log a "Timeout" Timestamp.
+			 */
+			VSLb(vc->wrk->vsl, SLT_FetchError,
+			     "req_total_timeout elapsed");
+			return (-1);
+		}
 	}
 	return (i + l);
 }
