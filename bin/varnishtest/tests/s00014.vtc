@@ -48,16 +48,15 @@ varnish v1 -vcl+backend {
 }
 
 logexpect l1 -v v1 -d 0 -q "FetchError" {
- 	expect 0 *	Begin     {^bereq \d+ retry$}
- 	expect * =	End
+	expect 0 *	Begin        {^bereq \d+ retry$}
+	expect * =	BerespHeader {^Retries: [34]$}
+	expect * =	End
 } -start
 
 client c1 {
 	txreq
 	rxresp
 	expect resp.status == 503
-	expect resp.http.Retries >= 3
-	expect resp.http.Retries < 5
 } -run
 
 server s1 -break
