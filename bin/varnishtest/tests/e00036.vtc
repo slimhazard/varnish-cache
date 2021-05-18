@@ -1,0 +1,155 @@
+varnishtest "ESI maxwait with timeout"
+
+server s1 {
+	rxreq
+	txresp -body {
+		<html>
+		Before include
+		<esi:include src="/body" maxwait="1"/>
+		After include
+		</html>
+	}
+	rxreq
+	delay 1.1
+	txresp -body {
+		Included file
+	}
+} -start
+
+varnish v1 -arg "-p max_restarts=5 -p max_retries=5"-vcl+backend {
+	sub vcl_backend_response {
+		set beresp.do_esi = true;
+	}
+} -start
+
+client c1 {
+	txreq
+	rxresp
+	expect resp.status == 200
+} -run
+
+logexpect l1 -v v1 -d 1 -q "Timestamp:Timeout" {
+	expect 0 *	Begin        bereq
+	expect * =	BereqURL     /body
+	expect * =	Timestamp    Timeout
+	expect 0 =	FetchError   "req_total_timeout elapsed"
+	expect * =	BerespStatus 503
+	expect * =	End
+
+	expect 0 *	Begin      {^req \d+ esi$}
+	expect * =	ReqURL     /body
+	expect * =	Timestamp  Timeout
+	expect 0 =	Error      "req_total_timeout elapsed"
+	expect * =	RespStatus 503
+	expect * =	End
+} -run
+
+server s1 -wait
+server s1 {
+	rxreq
+	expect req.url == "/body"
+	txresp -body {
+		Included file
+	}
+} -start
+
+varnish v1 -vcl+backend {
+	import vtc;
+
+	sub vcl_recv {
+		if (req.esi_level > 0) {
+			vtc.sleep(1.1s);
+		}
+	}
+
+	sub vcl_backend_response {
+		set beresp.do_esi = true;
+	}
+}
+
+logexpect l1 -v v1 -d 0 -q "Timestamp:Timeout" {
+	expect 0 *	Begin      {^req \d+ esi$}
+	expect * =	ReqURL     /body
+	expect * =	Timestamp  Timeout
+	expect 0 =	Error      "req_total_timeout elapsed"
+	expect * =	RespStatus 503
+	expect * =	End
+} -start
+
+client c1 -run
+logexpect l1 -wait
+
+server s1 -break
+server s1 -start
+
+varnish v1 -vcl+backend {
+	import vtc;
+
+	sub vcl_recv {
+		if (req.esi_level > 0) {
+			vtc.sleep(0.3s);
+			return (restart);
+		}
+	}
+
+	sub vcl_synth {
+		set resp.http.Restarts = req.restarts;
+	}
+
+	sub vcl_backend_response {
+		set beresp.do_esi = true;
+	}
+}
+
+logexpect l1 -v v1 -d 0 -q "Timestamp:Timeout" {
+	expect 0 *	Begin      {^req \d+ restart$}
+	expect * =	ReqURL     /body
+	expect * =	Timestamp  Timeout
+	expect 0 =	Error      "req_total_timeout elapsed"
+	expect * =	RespStatus 503
+	expect * =	RespHeader {^Restarts: [34]$}
+	expect * =	End
+} -start
+
+client c1 -run
+logexpect l1 -wait
+
+server s1 -break
+server s1 {
+	rxreq
+	expect req.url == "/body"
+	delay 0.3
+	txresp -body {
+		Included file
+	}
+} -start
+
+varnish v1 -vcl+backend {
+	sub vcl_backend_response {
+		set beresp.do_esi = true;
+		return (retry);
+	}
+
+	sub vcl_backend_error {
+		set beresp.http.Retries = bereq.retries;
+	}
+}
+
+logexpect l1 -v v1 -d 0 -q "Timestamp:Timeout" -g request {
+	expect * *	Begin      {^req \d+ esi$}
+	expect * =	ReqURL     /body
+	expect * =	Timestamp  Timeout
+	expect 0 =	Error      "req_total_timeout elapsed"
+	expect * =	RespStatus 503
+	expect * =	End
+
+	expect * *	Begin        {^bereq \d+ retry}
+	expect * =	BereqURL     /body
+	expect * =	FetchError   
+	expect * =	BerespStatus 503
+	expect * =	BerespHeader {^Retries: [1-4]$}
+	expect * =	End
+} -start
+
+client c1 -run
+logexpect l1 -wait

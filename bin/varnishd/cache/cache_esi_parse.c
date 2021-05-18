@@ -32,6 +32,8 @@
 
 #include "config.h"
 
+#include <stdlib.h>
+
 #include "cache_varnishd.h"
 #include "cache_filter.h"
 
@@ -114,6 +116,7 @@ struct vep_state {
 	dostuff_f		*dostuff;
 
 	struct vsb		*include_src;
+	double			maxwait;
 
 	unsigned		nm_skip;
 	unsigned		nm_verbatim;
@@ -181,6 +184,7 @@ static struct vep_match vep_match_esi[] = {
 
 static struct vep_match vep_match_attr_include[] = {
 	{ "src=",	&VEP_ATTRGETVAL },
+	{ "maxwait=",	&VEP_ATTRGETVAL },
 	{ NULL,		&VEP_SKIPATTR }
 };
 
@@ -433,37 +437,66 @@ static void v_matchproto_()
 vep_do_include(struct vep_state *vep, enum dowhat what)
 {
 	const char *p, *q, *h;
+	char *n;
 	ssize_t l;
 
 	Debug("DO_INCLUDE(%d)\n", what);
 	if (what == DO_ATTR) {
 		Debug("ATTR (%s) (%s)\n", vep->match_hit->match,
 			VSB_data(vep->attr_vsb));
-		if (vep->include_src != NULL) {
-			vep_error(vep,
-			    "ESI 1.0 <esi:include> "
-			    "has multiple src= attributes");
-			vep->state = VEP_TAGERROR;
-			VSB_destroy(&vep->attr_vsb);
-			VSB_destroy(&vep->include_src);
-			return;
-		}
-		for (p = VSB_data(vep->attr_vsb); *p != '\0'; p++)
-			if (vct_islws(*p))
-				break;
-		if (*p != '\0') {
-			vep_error(vep,
-			    "ESI 1.0 <esi:include> "
-			    "has whitespace in src= attribute");
-			vep->state = VEP_TAGERROR;
-			VSB_destroy(&vep->attr_vsb);
-			if (vep->include_src != NULL)
+		if (strcmp(vep->match_hit->match, "src=") == 0) {
+			if (vep->include_src != NULL) {
+				vep_error(vep,
+					  "ESI 1.0 <esi:include> "
+					  "has multiple src= attributes");
+				vep->state = VEP_TAGERROR;
+				VSB_destroy(&vep->attr_vsb);
 				VSB_destroy(&vep->include_src);
+				return;
+			}
+			for (p = VSB_data(vep->attr_vsb); *p != '\0'; p++)
+				if (vct_islws(*p))
+					break;
+			if (*p != '\0') {
+				vep_error(vep,
+					  "ESI 1.0 <esi:include> "
+					  "has whitespace in src= attribute");
+				vep->state = VEP_TAGERROR;
+				VSB_destroy(&vep->attr_vsb);
+				if (vep->include_src != NULL)
+					VSB_destroy(&vep->include_src);
+				return;
+			}
+			vep->include_src = vep->attr_vsb;
+			vep->attr_vsb = NULL;
 			return;
-		}
-		vep->include_src = vep->attr_vsb;
-		vep->attr_vsb = NULL;
-		return;
+		} else if (strcmp(vep->match_hit->match, "maxwait=") == 0) {
+			if (!isnan(vep->maxwait)) {
+				vep_error(vep,
+					  "ESI 1.0 <esi:include> "
+					  "has multiple maxwait= attributes");
+				vep->state = VEP_TAGERROR;
+				VSB_destroy(&vep->attr_vsb);
+				if (vep->include_src != NULL)
+					VSB_destroy(&vep->include_src);
+				return;
+			}
+			errno = 0;
+			vep->maxwait = strtod(VSB_data(vep->attr_vsb), &n);
+			if (errno != 0 || *n != '\0') {
+				vep_error(vep,
+					  "ESI 1.0 <esi:include> "
+					  "has an invalid maxwait= value");
+				vep->state = VEP_TAGERROR;
+				VSB_destroy(&vep->attr_vsb);
+				if (vep->include_src != NULL)
+					VSB_destroy(&vep->include_src);
+				return;
+			}
+			VSB_destroy(&vep->attr_vsb);
+			return;
+		} else
+			WRONG("invalid ESI attribute");
 	}
 	assert(what == DO_TAG);
 	if (!vep->emptytag)
@@ -483,6 +516,12 @@ vep_do_include(struct vep_state *vep, enum dowhat what)
 	 * care of that.  Make sure.
 	 */
 	assert(vep->o_wait == 0 || vep->last_mark == SKIP);
+
+	if (!isnan(vep->maxwait)) {
+		VSB_putc(vep->vsb, VEC_WAIT);
+		VSB_bcat(vep->vsb, &vep->maxwait, sizeof(double));
+	}
+
 	/* XXX: what if it contains NUL bytes ?? */
 	p = VSB_data(vep->include_src);
 	l = VSB_len(vep->include_src);
@@ -1065,6 +1104,8 @@ VEP_Init(struct vfp_ctx *vc, const struct http *req, vep_callback_t *cb,
 		vep->cb = vep_default_cb;
 		vep->cb_priv = &vep->cb_x;
 	}
+
+	vep->maxwait = NAN;
 
 	vep->state = VEP_START;
 	vep->crc = crc32(0L, Z_NULL, 0);
