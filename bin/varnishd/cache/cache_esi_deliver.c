@@ -67,6 +67,7 @@ struct ecx {
 
 	struct req	*preq;
 	struct ecx	*pecx;
+	double		maxwait;
 	ssize_t		l_crc;
 	uint32_t	crc;
 };
@@ -113,6 +114,7 @@ ved_include(struct req *preq, const char *src, const char *host,
 	struct sess *sp;
 	struct req *req;
 	enum req_fsm_nxt s;
+	double deadline;
 
 	CHECK_OBJ_NOTNULL(preq, REQ_MAGIC);
 	CHECK_OBJ_NOTNULL(preq->top, REQTOP_MAGIC);
@@ -185,6 +187,11 @@ ved_include(struct req *preq, const char *src, const char *host,
 	assert(req->req_step == R_STP_TRANSPORT);
 	req->t_req = preq->t_req;
 	req->t_deadline = preq->t_deadline;
+	if (ecx->maxwait != 0.) {
+		deadline = VTIM_mono() + ecx->maxwait;
+		if (req->t_deadline <= 0. || deadline < req->t_deadline)
+			req->t_deadline = deadline;
+	}
 
 	req->transport = &VED_transport;
 	req->transport_priv = ecx;
@@ -379,6 +386,12 @@ ved_vdp_esi_bytes(struct vdp_ctx *vdx, enum vdp_action act, void **priv,
 					return (-1);
 				Debug("SKIP1(%d)\n", (int)ecx->l);
 				ecx->state = 4;
+				break;
+			case VEC_WAIT:
+				ecx->p++;
+				memcpy(&ecx->maxwait, ecx->p, sizeof(double));
+				Debug("MAXWAIT [%f]\n", ecx->maxwait);
+				ecx->p += sizeof(double);
 				break;
 			case VEC_INCL:
 				ecx->p++;
