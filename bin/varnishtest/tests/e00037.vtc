@@ -1,0 +1,67 @@
+varnishtest "ESI maxwait syntax"
+
+server s1 {
+	rxreq
+	txresp -body {
+		<html>
+		Before include
+		<esi:include src="/body" maxwait="0" maxwait="1"/>
+		<esi:include src="/body" maxwait=""/>
+		<esi:include src="/body" maxwait="-1"/>
+		<esi:include src="/body" maxwait="foo"/>
+		<esi:include src="/body" maxwait="4711foo"/>
+		<esi:include src="/body" maxwait="4711 0815"/>
+		<esi:include src="/body" maxwait="NaN"/>
+		<esi:include src="/body" maxwait="Inf"/>
+		<esi:include src="/body" maxwait="-Inf"/>
+		After include
+		</html>
+	}
+	rxreq
+	txresp -body {
+		Included file
+	}
+} -start
+
+varnish v1 -vcl+backend {
+	sub vcl_backend_response {
+		set beresp.do_esi = true;
+	}
+} -start
+
+client c1 {
+	txreq
+	rxresp
+	expect resp.status == 200
+	expect resp.body == {
+		<html>
+		Before include
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		After include
+		</html>
+	}
+} -run
+
+logexpect l1 -v v1 -d 1 -q ESI_xmlerror {
+	expect 0 * Begin        bereq
+	expect * = ESI_xmlerror "ESI 1.0 <esi:include> has multiple maxwait= attributes"
+	expect * = ESI_xmlerror "ESI 1.0 <esi:include> has an invalid maxwait= value"
+	expect * = ESI_xmlerror "ESI 1.0 <esi:include> has an invalid maxwait= value"
+	expect * = ESI_xmlerror "ESI 1.0 <esi:include> has an invalid maxwait= value"
+	expect * = ESI_xmlerror "ESI 1.0 <esi:include> has an invalid maxwait= value"
+	expect * = ESI_xmlerror "ESI 1.0 <esi:include> has an invalid maxwait= value"
+	expect * = ESI_xmlerror "ESI 1.0 <esi:include> has an invalid maxwait= value"
+	expect * = ESI_xmlerror "ESI 1.0 <esi:include> has an invalid maxwait= value"
+	expect * = ESI_xmlerror "ESI 1.0 <esi:include> has an invalid maxwait= value"
+	expect * = End
+} -run
+
+server s1 -break
