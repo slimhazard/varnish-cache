@@ -145,7 +145,7 @@ logexpect l1 -v v1 -d 0 -q "Timestamp:Timeout" -g request {
 
 	expect * *	Begin        {^bereq \d+ retry}
 	expect * =	BereqURL     /body
-	expect * =	FetchError   
+	expect * =	FetchError   "req_total_timeout elapsed"
 	expect * =	BerespStatus 503
 	expect * =	BerespHeader {^Retries: [1-4]$}
 	expect * =	End
