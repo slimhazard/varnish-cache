@@ -138,8 +138,6 @@ varnish v1 -vcl+backend {
 logexpect l1 -v v1 -d 0 -q "Timestamp:Timeout" -g request {
 	expect * *	Begin      {^req \d+ esi$}
 	expect * =	ReqURL     /body
-	expect * =	Timestamp  Timeout
-	expect 0 =	Error      "req_total_timeout elapsed"
 	expect * =	RespStatus 503
 	expect * =	End
 
