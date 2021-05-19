@@ -476,6 +476,7 @@ vep_do_include(struct vep_state *vep, enum dowhat what)
 					  "ESI 1.0 <esi:include> "
 					  "has multiple maxwait= attributes");
 				vep->state = VEP_TAGERROR;
+				vep->maxwait = NAN;
 				VSB_destroy(&vep->attr_vsb);
 				if (vep->include_src != NULL)
 					VSB_destroy(&vep->include_src);
@@ -483,11 +484,14 @@ vep_do_include(struct vep_state *vep, enum dowhat what)
 			}
 			errno = 0;
 			vep->maxwait = strtod(VSB_data(vep->attr_vsb), &n);
-			if (errno != 0 || *n != '\0') {
+			if (VSB_len(vep->attr_vsb) == 0 || errno != 0 ||
+			    *n != '\0' || vep->maxwait < 0. ||
+			    !isfinite(vep->maxwait)) {
 				vep_error(vep,
 					  "ESI 1.0 <esi:include> "
 					  "has an invalid maxwait= value");
 				vep->state = VEP_TAGERROR;
+				vep->maxwait = NAN;
 				VSB_destroy(&vep->attr_vsb);
 				if (vep->include_src != NULL)
 					VSB_destroy(&vep->include_src);
@@ -520,6 +524,7 @@ vep_do_include(struct vep_state *vep, enum dowhat what)
 	if (!isnan(vep->maxwait)) {
 		VSB_putc(vep->vsb, VEC_WAIT);
 		VSB_bcat(vep->vsb, &vep->maxwait, sizeof(double));
+		vep->maxwait = NAN;
 	}
 
 	/* XXX: what if it contains NUL bytes ?? */
