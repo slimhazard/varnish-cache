@@ -1100,8 +1100,10 @@ cnt_deadline(struct req *req)
 	VSLb(req->vsl, SLT_Error, "req_total_timeout elapsed");
 	req->err_code = 503;
 	req->req_step = R_STP_SYNTH;
-	if (req->objcore != NULL)
+	if (req->objcore != NULL) {
+		(void)HSH_Cancel(req->wrk, req->objcore, NULL);
 		(void)HSH_DerefObjCore(req->wrk, &req->objcore, 1);
+	}
 	if (req->stale_oc != NULL)
 		(void)HSH_DerefObjCore(req->wrk, &req->stale_oc, 0);
 	AZ(req->objcore);
