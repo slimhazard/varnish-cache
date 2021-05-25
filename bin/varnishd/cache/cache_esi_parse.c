@@ -497,6 +497,7 @@ vep_do_include(struct vep_state *vep, enum dowhat what)
 					VSB_destroy(&vep->include_src);
 				return;
 			}
+			vep->maxwait *= 1e-3;
 			VSB_destroy(&vep->attr_vsb);
 			return;
 		} else

@@ -5,7 +5,7 @@ server s1 {
 	txresp -body {
 		<html>
 		Before include
-		<esi:include src="/body" maxwait="0" maxwait="1"/>
+		<esi:include src="/body" maxwait="0" maxwait="1000"/>
 		<esi:include src="/body" maxwait=""/>
 		<esi:include src="/body" maxwait="-1"/>
 		<esi:include src="/body" maxwait="foo"/>
