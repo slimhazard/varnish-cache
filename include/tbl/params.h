@@ -237,7 +237,7 @@ PARAM_SIMPLE(
 	/* def */	"0",
 	/* units */	"seconds",
 	/* descr */
-	"Global timeout for all request/response processing intiated by "
+	"Global timeout for all request/response processing initiated by "
 	"an incoming client request.\n"
 	"This is the timeout for all processing stages, including (but not "
 	"limited to) backend requests, ESI includes, restarts and retries.\n"
