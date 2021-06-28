@@ -1021,6 +1021,20 @@ vbf_deadline(struct busyobj *bo, const struct fetch_step *stp)
 	if (stp == F_STP_ERROR || stp == F_STP_FAIL)
 		return (stp);
 	bo->htc->doclose = SC_RX_TIMEOUT;
+	if (bo->bereq_body != NULL) {
+		CHECK_OBJ(bo->bereq_body, OBJCORE_MAGIC);
+		if (bo->bereq_body->flags & OC_F_BUSY)
+			HSH_Unbusy(bo->wrk, bo->bereq_body);
+		(void)HSH_DerefObjCore(bo->wrk, &bo->bereq_body,
+				       HSH_RUSH_POLICY);
+	}
+	if (bo->stale_oc != NULL) {
+		CHECK_OBJ(bo->stale_oc, OBJCORE_MAGIC);
+		if (bo->stale_oc->flags & OC_F_BUSY)
+			HSH_Unbusy(bo->wrk, bo->stale_oc);
+		(void)HSH_DerefObjCore(bo->wrk, &bo->stale_oc,
+				       HSH_RUSH_POLICY);
+	}
 	vbf_cleanup(bo);
 	return (F_STP_ERROR);
 }

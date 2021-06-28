@@ -1101,13 +1101,32 @@ cnt_deadline(struct req *req)
 	req->err_code = 503;
 	req->req_step = R_STP_SYNTH;
 	if (req->objcore != NULL) {
-		(void)HSH_Cancel(req->wrk, req->objcore, NULL);
-		(void)HSH_DerefObjCore(req->wrk, &req->objcore, 1);
+		CHECK_OBJ(req->objcore, OBJCORE_MAGIC);
+		if (req->objcore->flags & OC_F_BUSY)
+			HSH_Unbusy(req->wrk, req->objcore);
+		(void)HSH_Cancel(req->wrk, req->objcore, req->objcore->boc);
+		(void)HSH_DerefObjCore(req->wrk, &req->objcore,
+				       HSH_RUSH_POLICY);
 	}
-	if (req->stale_oc != NULL)
-		(void)HSH_DerefObjCore(req->wrk, &req->stale_oc, 0);
+	if (req->stale_oc != NULL) {
+		CHECK_OBJ(req->stale_oc, OBJCORE_MAGIC);
+		if (req->stale_oc->flags & OC_F_BUSY)
+			HSH_Unbusy(req->wrk, req->stale_oc);
+		(void)HSH_DerefObjCore(req->wrk, &req->stale_oc,
+				       HSH_RUSH_POLICY);
+	}
+	if (req->body_oc != NULL) {
+		CHECK_OBJ(req->body_oc, OBJCORE_MAGIC);
+		if (req->body_oc->flags & OC_F_BUSY)
+			HSH_Unbusy(req->wrk, req->body_oc);
+		(void)HSH_DerefObjCore(req->wrk, &req->body_oc,
+				       HSH_RUSH_POLICY);
+	}
+	if (req->vary_b != NULL)
+		VRY_Finish(req, DISCARD);
 	AZ(req->objcore);
 	AZ(req->stale_oc);
+	AZ(req->body_oc);
 }
 
 void

@@ -1,0 +1,49 @@
+varnishtest "req_total_timeout expiration during busyobj wait"
+
+barrier b1 cond 2
+barrier b2 cond 2
+
+server s1 {
+	rxreq
+	barrier b1 sync
+	barrier b2 sync
+	delay 1.1
+	txresp
+} -start
+
+varnish v1 -arg "-p req_total_timeout=2" -arg "-p debug=+waitinglist" -arg "-p debug=+syncvsl" -vcl+backend {} -start
+
+client c1 {
+	txreq
+	rxresp
+	expect resp.status == 503
+} -start
+
+barrier b1 sync
+
+client c2 {
+	txreq
+	rxresp
+	expect resp.status == 503
+} -start
+
+delay 1
+varnish v1 -expect busy_sleep == 1
+barrier b2 sync
+
+client c1 -wait
+client c2 -wait
+
+logexpect l1 -v v1 -d 1 -q FetchError {
+	expect 0 * Begin	bereq
+	expect * = Timestamp	Timeout
+	expect 0 = FetchError	"req_total_timeout elapsed"
+	expect * = End
+} -run
+
+logexpect l1 -v v1 -d 1 -q {Debug ~ "waiting list"} {
+	expect 0 * Begin	 req
+	expect * = Debug	 "on waiting list"
+	expect * = Debug	 "off waiting list"
+	expect * = End
+} -run
