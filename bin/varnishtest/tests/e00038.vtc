@@ -1,0 +1,47 @@
+varnishtest "ESI maxwait, timeout with a pending busyobj"
+
+# This case caused a panic in a development version.
+
+server s1 {
+	rxreq
+	txresp -body {
+		<html>
+		Before include
+		<esi:include src="/body"/><esi:include src="/body" maxwait="1000"/>
+		After include
+		</html>
+	}
+	rxreq
+	delay 1.1
+	txresp -body {
+		Included file
+	}
+} -start
+
+varnish v1 -arg "-p req_total_timeout=1" -vcl+backend {
+	sub vcl_backend_response {
+		set beresp.do_esi = true;
+	}
+} -start
+
+client c1 {
+	txreq
+	rxresp
+	expect resp.status == 200
+} -run
+
+logexpect l1 -v v1 -d 1 -q "Timestamp:Timeout" {
+	expect 0 *	Begin        bereq
+	expect * =	BereqURL     /body
+	expect * =	Timestamp    Timeout
+	expect 0 =	FetchError   "req_total_timeout elapsed"
+	expect * =	BerespStatus 503
+	expect * =	End
+
+	expect 0 *	Begin      {^req \d+ esi$}
+	expect * =	ReqURL     /body
+	expect * =	Timestamp  Timeout
+	expect 0 =	Error      "req_total_timeout elapsed"
+	expect * =	RespStatus 503
+	expect * =	End
+} -run
