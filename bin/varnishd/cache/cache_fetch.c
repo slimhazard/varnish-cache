@@ -1075,11 +1075,11 @@ vbf_fetch_thread(struct worker *wrk, void *priv)
 			AN(bo->req);
 		else
 			AZ(bo->req);
-		stp = vbf_deadline(bo, stp);
 		AN(stp);
 		AN(stp->name);
 		AN(stp->func);
 		stp = stp->func(wrk, bo);
+		stp = vbf_deadline(bo, stp);
 	}
 
 	assert(bo->director_state == DIR_S_NULL);

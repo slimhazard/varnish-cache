@@ -1093,7 +1093,8 @@ cnt_diag(struct req *req, const char *state)
 static void
 cnt_deadline(struct req *req)
 {
-	if (req->t_deadline == 0. || VTIM_mono() <= req->t_deadline)
+	if (req->t_deadline == 0. || VTIM_mono() <= req->t_deadline ||
+	    req->req_step ==  R_STP_TRANSPORT)
 		return;
 	req->t_deadline = 0.;
 	VSLb_ts_req(req, "Timeout", VTIM_real());
@@ -1102,8 +1103,6 @@ cnt_deadline(struct req *req)
 	req->req_step = R_STP_SYNTH;
 	if (req->objcore != NULL) {
 		CHECK_OBJ(req->objcore, OBJCORE_MAGIC);
-		if (req->objcore->flags & OC_F_BUSY)
-			HSH_Unbusy(req->wrk, req->objcore);
 		(void)HSH_Cancel(req->wrk, req->objcore, req->objcore->boc);
 		(void)HSH_DerefObjCore(req->wrk, &req->objcore,
 				       HSH_RUSH_POLICY);
@@ -1180,7 +1179,6 @@ CNT_Request(struct req *req)
 		CHECK_OBJ_ORNULL(wrk->nobjhead, OBJHEAD_MAGIC);
 		CHECK_OBJ_NOTNULL(req, REQ_MAGIC);
 
-		cnt_deadline(req);
 		AN(req->req_step);
 		AN(req->req_step->name);
 		AN(req->req_step->func);
@@ -1188,6 +1186,7 @@ CNT_Request(struct req *req)
 			cnt_diag(req, req->req_step->name);
 		nxt = req->req_step->func(wrk, req);
 		CHECK_OBJ_ORNULL(wrk->nobjhead, OBJHEAD_MAGIC);
+		cnt_deadline(req);
 	}
 	wrk->vsl = NULL;
 	if (nxt == REQ_FSM_DONE) {
