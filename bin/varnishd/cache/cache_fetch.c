@@ -942,6 +942,17 @@ vbf_stp_error(struct worker *wrk, struct busyobj *bo)
 
 	assert(wrk->handling == VCL_RET_DELIVER);
 
+	CHECK_OBJ_NOTNULL(bo->vfc, VFP_CTX_MAGIC);
+	if (bo->vfc->wrk == NULL) {
+		/*
+		 * Not initialized due to deadline elapse before
+		 * STARTFETCH.
+		 */
+		VFP_Setup(bo->vfc, bo->wrk);
+		bo->vfc->oc = oc;
+		bo->vfc->resp = bo->beresp;
+		bo->vfc->req = bo->bereq;
+	}
 	assert(bo->vfc->wrk == bo->wrk);
 	assert(bo->vfc->oc == oc);
 	assert(bo->vfc->resp == bo->beresp);

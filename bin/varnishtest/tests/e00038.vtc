@@ -63,7 +63,24 @@ varnish v1 -vcl+backend {
 	}
 }
 
+logexpect l1 -v v1 -d 0 -q "Timestamp:Timeout" {
+	expect 0 *	Begin        bereq
+	expect * =	Timestamp    Timeout
+	expect 0 =	FetchError   "req_total_timeout elapsed"
+	expect * =	BerespStatus 503
+	expect * =	End
+
+	expect 0 *	Begin      req
+	expect * =	Timestamp  Timeout
+	expect 0 =	Error      "req_total_timeout elapsed"
+	expect * =	RespStatus 503
+	expect * =	End
+} -start
+
 client c1 {
 	txreq -url /foo
 	rxresp
+	expect resp.status == 503
 } -run
+
+logexpect l1 -wait
