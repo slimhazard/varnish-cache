@@ -1020,7 +1020,10 @@ vbf_deadline(struct busyobj *bo, const struct fetch_step *stp)
 	bo->t_deadline = 0;
 	if (stp == F_STP_ERROR || stp == F_STP_FAIL)
 		return (stp);
-	bo->htc->doclose = SC_RX_TIMEOUT;
+	if (bo->htc != NULL) {
+		CHECK_OBJ(bo->htc, HTTP_CONN_MAGIC);
+		bo->htc->doclose = SC_RX_TIMEOUT;
+	}
 	if (bo->bereq_body != NULL) {
 		CHECK_OBJ(bo->bereq_body, OBJCORE_MAGIC);
 		AZ(bo->bereq_body->flags & OC_F_BUSY);

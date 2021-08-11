@@ -1,6 +1,8 @@
-varnishtest "ESI maxwait, timeout with a pending busyobj"
+varnishtest "ESI maxwait/req_total_timeout expiration in the backend FSM"
 
-# This case caused a panic in a development version.
+##
+## Timeout while a busyobj is pending
+##
 
 server s1 {
 	rxreq
@@ -44,4 +46,24 @@ logexpect l1 -v v1 -d 1 -q "Timestamp:Timeout" {
 	expect 0 =	Error      "req_total_timeout elapsed"
 	expect * =	RespStatus 503
 	expect * =	End
+} -run
+
+##
+## Timeout before the STARTFETCH step
+##
+
+server s1 -wait
+server s1 {} -start
+
+varnish v1 -vcl+backend {
+	import vtc;
+
+	sub vcl_miss {
+		vtc.sleep(1.1s);
+	}
+}
+
+client c1 {
+	txreq -url /foo
+	rxresp
 } -run
