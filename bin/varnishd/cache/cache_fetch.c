@@ -1029,7 +1029,7 @@ vbf_deadline(struct busyobj *bo, const struct fetch_step *stp)
 	VSLb(bo->vsl, SLT_FetchError, "req_total_timeout elapsed");
 	bo->err_code = 503;
 	bo->t_deadline = 0;
-	if (stp == F_STP_ERROR || stp == F_STP_FAIL)
+	if (stp == F_STP_ERROR || stp == F_STP_FAIL || stp == F_STP_DONE)
 		return (stp);
 	if (bo->htc != NULL) {
 		CHECK_OBJ(bo->htc, HTTP_CONN_MAGIC);
