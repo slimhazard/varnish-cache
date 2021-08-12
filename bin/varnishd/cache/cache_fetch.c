@@ -158,6 +158,21 @@ Bereq_Rollback(VRT_CTX)
 }
 
 /*--------------------------------------------------------------------
+ * Log and record the expiration of req_total_timeout
+ */
+
+static inline void
+vbf_deadline_expired(struct worker *wrk, struct busyobj *bo)
+{
+	CHECK_OBJ_NOTNULL(wrk, WORKER_MAGIC);
+	CHECK_OBJ_NOTNULL(bo, BUSYOBJ_MAGIC);
+
+	VSLb_ts_busyobj(bo, "Timeout", W_TIM_real(wrk));
+	VSLb(bo->vsl, SLT_FetchError, "req_total_timeout elapsed");
+	bo->t_deadline = -1.;
+}
+
+/*--------------------------------------------------------------------
  * Turn the beresp into a obj
  */
 
@@ -934,6 +949,13 @@ vbf_stp_error(struct worker *wrk, struct busyobj *bo)
 
 	if (wrk->handling == VCL_RET_RETRY) {
 		VSB_destroy(&synth_body);
+		if (bo->t_deadline > 0. && VTIM_mono() > bo->t_deadline)
+			vbf_deadline_expired(wrk, bo);
+		if (bo->t_deadline < 0.) {
+			VSLb(bo->vsl, SLT_VCL_Error,
+			     "No more retries after req_total_timeout elapse");
+			return (F_STP_FAIL);
+		}
 		if (bo->retries++ < cache_param->max_retries)
 			return (F_STP_RETRY);
 		VSLb(bo->vsl, SLT_VCL_Error, "Too many retries, failing");
@@ -1023,12 +1045,13 @@ vbf_stp_done(struct worker *wrk, struct busyobj *bo)
 static const struct fetch_step *
 vbf_deadline(struct busyobj *bo, const struct fetch_step *stp)
 {
-	if (bo->t_deadline == 0. || VTIM_mono() <= bo->t_deadline)
+	CHECK_OBJ_NOTNULL(bo, BUSYOBJ_MAGIC);
+	CHECK_OBJ_NOTNULL(bo->wrk, WORKER_MAGIC);
+
+	if (bo->t_deadline <= 0. || VTIM_mono() <= bo->t_deadline)
 		return (stp);
-	VSLb_ts_busyobj(bo, "Timeout", VTIM_real());
-	VSLb(bo->vsl, SLT_FetchError, "req_total_timeout elapsed");
+	vbf_deadline_expired(bo->wrk, bo);
 	bo->err_code = 503;
-	bo->t_deadline = 0;
 	if (stp == F_STP_ERROR || stp == F_STP_FAIL || stp == F_STP_DONE)
 		return (stp);
 	if (bo->htc != NULL) {

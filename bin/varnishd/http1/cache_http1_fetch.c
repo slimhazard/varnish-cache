@@ -226,6 +226,7 @@ V1F_FetchRespHdr(struct busyobj *bo)
 				VSLb_ts_busyobj(bo, "Timeout", VTIM_real());
 				VSLb(bo->vsl, SLT_FetchError,
 				     "req_total_timeout elapsed");
+				bo->t_deadline = -1.;
 			}
 			htc->doclose = SC_RX_TIMEOUT;
 			break;

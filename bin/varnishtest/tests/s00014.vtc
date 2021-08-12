@@ -63,6 +63,34 @@ server s1 -break
 
 logexpect l1 -wait
 
+server s1 -start
+
+varnish v1 -vcl+backend {
+	sub vcl_backend_response {
+		set beresp.http.Retries = bereq.retries;
+		return (error);
+	}
+
+	sub vcl_backend_error {
+		return (retry);
+	}
+}
+
+logexpect l1 -v v1 -d 0 -q VCL_Error {
+	expect 0 *	Begin      {^bereq \d+ retry$}
+	expect * =	Timestamp  Timeout
+	expect 0 =	FetchError "req_total_timeout elapsed"
+	expect * =	VCL_call   BACKEND_ERROR
+	expect 0 =	VCL_return retry
+	expect 0 =	VCL_Error  {^No more retries after req_total_timeout elapse$}
+	expect * =	End
+} -start
+
+client c1 -run
+
+server s1 -break
+logexpect l1 -wait
+
 # ESI
 server s1 {
 	rxreq
