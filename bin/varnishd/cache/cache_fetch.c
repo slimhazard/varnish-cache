@@ -173,6 +173,24 @@ vbf_deadline_expired(struct worker *wrk, struct busyobj *bo)
 }
 
 /*--------------------------------------------------------------------
+ * Initialize fetch proc ctx
+ */
+
+static inline void
+vbf_vfc_init(struct worker *wrk, struct busyobj *bo, struct objcore *oc)
+{
+	CHECK_OBJ_NOTNULL(wrk, WORKER_MAGIC);
+	CHECK_OBJ_NOTNULL(bo, BUSYOBJ_MAGIC);
+	CHECK_OBJ_NOTNULL(bo->vfc, VFP_CTX_MAGIC);
+	CHECK_OBJ_NOTNULL(oc, OBJCORE_MAGIC);
+
+	VFP_Setup(bo->vfc, bo->wrk);
+	bo->vfc->oc = oc;
+	bo->vfc->resp = bo->beresp;
+	bo->vfc->req = bo->bereq;
+}
+
+/*--------------------------------------------------------------------
  * Turn the beresp into a obj
  */
 
@@ -433,10 +451,7 @@ vbf_stp_startfetch(struct worker *wrk, struct busyobj *bo)
 
 	AZ(bo->htc);
 
-	VFP_Setup(bo->vfc, wrk);
-	bo->vfc->oc = oc;
-	bo->vfc->resp = bo->beresp;
-	bo->vfc->req = bo->bereq;
+	vbf_vfc_init(wrk, bo, oc);
 
 	if (wrk->handling == VCL_RET_ERROR)
 		return (F_STP_ERROR);
@@ -964,17 +979,13 @@ vbf_stp_error(struct worker *wrk, struct busyobj *bo)
 
 	assert(wrk->handling == VCL_RET_DELIVER);
 
-	CHECK_OBJ_NOTNULL(bo->vfc, VFP_CTX_MAGIC);
-	if (bo->vfc->wrk == NULL) {
+	if (bo->vfc->wrk == NULL)
 		/*
 		 * Not initialized due to deadline elapse before
 		 * STARTFETCH.
 		 */
-		VFP_Setup(bo->vfc, bo->wrk);
-		bo->vfc->oc = oc;
-		bo->vfc->resp = bo->beresp;
-		bo->vfc->req = bo->bereq;
-	}
+		vbf_vfc_init(wrk, bo, oc);
+
 	assert(bo->vfc->wrk == bo->wrk);
 	assert(bo->vfc->oc == oc);
 	assert(bo->vfc->resp == bo->beresp);
