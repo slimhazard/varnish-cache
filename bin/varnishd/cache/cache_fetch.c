@@ -1058,11 +1058,13 @@ vbf_deadline(struct busyobj *bo, const struct fetch_step *stp)
 {
 	CHECK_OBJ_NOTNULL(bo, BUSYOBJ_MAGIC);
 	CHECK_OBJ_NOTNULL(bo->wrk, WORKER_MAGIC);
+	CHECK_OBJ_NOTNULL(bo->fetch_objcore, OBJCORE_MAGIC);
 
 	if (bo->t_deadline <= 0. || VTIM_mono() <= bo->t_deadline)
 		return (stp);
 	vbf_deadline_expired(bo->wrk, bo);
 	bo->err_code = 503;
+
 	if (stp == F_STP_ERROR || stp == F_STP_FAIL || stp == F_STP_DONE)
 		return (stp);
 	if (bo->htc != NULL) {
@@ -1080,6 +1082,9 @@ vbf_deadline(struct busyobj *bo, const struct fetch_step *stp)
 		(void)HSH_DerefObjCore(bo->wrk, &bo->stale_oc, 0);
 	}
 	vbf_cleanup(bo);
+	if (!(bo->fetch_objcore->flags & OC_F_BUSY))
+		/* Streaming has begun, so we must go to FAIL. */
+		return (F_STP_FAIL);
 	return (F_STP_ERROR);
 }
 
