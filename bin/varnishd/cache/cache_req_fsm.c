@@ -1103,7 +1103,7 @@ cnt_deadline(struct req *req)
 	req->req_step = R_STP_SYNTH;
 	if (req->objcore != NULL) {
 		CHECK_OBJ(req->objcore, OBJCORE_MAGIC);
-		(void)HSH_Cancel(req->wrk, req->objcore, req->objcore->boc);
+		(void)HSH_Cancel(req->wrk, req->objcore, NULL);
 		(void)HSH_DerefObjCore(req->wrk, &req->objcore,
 				       HSH_RUSH_POLICY);
 	}
