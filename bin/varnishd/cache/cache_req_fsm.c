@@ -1090,12 +1090,15 @@ cnt_diag(struct req *req, const char *state)
 	VSL_Flush(req->vsl, 0);
 }
 
-static void
-cnt_deadline(struct req *req)
+static enum req_fsm_nxt
+cnt_deadline(struct req *req, struct worker *wrk, enum req_fsm_nxt nxt)
 {
-	if (req->t_deadline == 0. || VTIM_mono() <= req->t_deadline ||
-	    req->req_step ==  R_STP_TRANSPORT)
-		return;
+	/* req and wrk checked by caller */
+	struct objhead *oh;
+
+	if (nxt == REQ_FSM_DONE || req->req_step ==  R_STP_TRANSPORT ||
+	    req->t_deadline == 0. || VTIM_mono() <= req->t_deadline)
+		return (nxt);
 	req->t_deadline = 0.;
 	VSLb_ts_req(req, "Timeout", VTIM_real());
 	VSLb(req->vsl, SLT_Error, "req_total_timeout elapsed");
@@ -1122,6 +1125,22 @@ cnt_deadline(struct req *req)
 	AZ(req->objcore);
 	AZ(req->stale_oc);
 	AZ(req->body_oc);
+
+	if (nxt != REQ_FSM_DISEMBARK)
+		return (nxt);
+
+	/* Remove req from the waiting list and continue to synth. */
+	CHECK_OBJ_NOTNULL(req->hash_objhead, OBJHEAD_MAGIC);
+	oh = req->hash_objhead;
+	Lck_Lock(&oh->mtx);
+	VTAILQ_REMOVE(&oh->waitinglist, req, w_list);
+	Lck_Unlock(&oh->mtx);
+	if (DO_DEBUG(DBG_WAITINGLIST))
+		VSLb(req->vsl, SLT_Debug, "off waiting list <%p>", oh);
+	req->waitinglist = 0;
+	req->hash_objhead = NULL;
+	req->wrk = wrk;
+	return (REQ_FSM_MORE);
 }
 
 void
@@ -1186,7 +1205,7 @@ CNT_Request(struct req *req)
 			cnt_diag(req, req->req_step->name);
 		nxt = req->req_step->func(wrk, req);
 		CHECK_OBJ_ORNULL(wrk->nobjhead, OBJHEAD_MAGIC);
-		cnt_deadline(req);
+		nxt = cnt_deadline(req, wrk, nxt);
 	}
 	wrk->vsl = NULL;
 	if (nxt == REQ_FSM_DONE) {

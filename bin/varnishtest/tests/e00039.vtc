@@ -1,0 +1,96 @@
+varnishtest "ESI maxwait/req_total_timeout expiration and the waiting list"
+
+##
+## Timeout elapses *after* lookup and *before* the request would have
+## entered the waiting list
+##
+
+barrier b1 cond 2
+
+server s1 {
+	rxreq
+	txresp -body {
+		<html>
+		Before include
+		<esi:include src="/body" maxwait="500"/>
+		After include
+		</html>
+	}
+} -start
+
+server s0 {
+	rxreq
+	delay 1.1
+	txresp -body {
+		Included file
+	}
+} -dispatch
+
+varnish v1 -arg "-p req_total_timeout=1 -p debug=+waitinglist" -vcl+backend {
+	import vtc;
+
+	sub vcl_hash {
+		if (req.esi_level == 1) {
+                       	vtc.sleep(0.6s);
+		}
+	}
+
+	sub vcl_backend_fetch {
+		if (bereq.url == "/body") {
+			set bereq.backend = s0;
+		}
+		else {
+			set bereq.backend = s1;
+		}
+	}
+
+	sub vcl_backend_response {
+		set beresp.do_esi = true;
+	}
+} -start
+
+client c1 {
+	barrier b1 sync
+	txreq
+	rxresp
+	expect resp.status == 200
+} -start
+
+client c2 {
+	txreq -url /body
+	barrier b1 sync
+	rxresp
+	expect resp.status == 503
+} -start
+
+client c1 -wait
+client c2 -wait
+
+logexpect l1 -v v1 -d 1 -q {Begin ~ "esi"} {
+	expect 0 *	Begin        {^req \d+ esi}
+	expect * =	ReqURL       /body
+	expect * =	VCL_call     HASH
+	expect 0 =	VCL_return   lookup
+	expect 0 =	Timestamp    Timeout
+	expect 0 =	Error        {^req_total_timeout elapsed}
+	expect * =	RespStatus    503
+	expect * =	End
+} -run
+
+logexpect l1 -v v1 -d 1 -q {Begin ~ "^bereq" and Timestamp:Timeout} {
+	expect 0 *	Begin        {^bereq \d+ fetch}
+	expect * =	BereqURL     /body
+	expect * =	Timestamp    Timeout
+	expect 0 =	FetchError   {^req_total_timeout elapsed}
+	expect * =	BerespStatus 503
+	expect * =	End
+} -run
+
+logexpect l1 -v v1 -d 1 -q {Begin ~ "rxreq" and Timestamp:Timeout} {
+	expect 0 *	Begin        {^req \d+ rxreq}
+	expect * =	ReqURL       /body
+	expect * =	Timestamp    Timeout
+	expect 0 =	Error        {^req_total_timeout elapsed}
+	expect * =	RespStatus   503
+	expect * =	End
+} -run
