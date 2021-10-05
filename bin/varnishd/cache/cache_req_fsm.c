@@ -1186,7 +1186,8 @@ CNT_Request(struct req *req)
 			cnt_diag(req, req->req_step->name);
 		nxt = req->req_step->func(wrk, req);
 		CHECK_OBJ_ORNULL(wrk->nobjhead, OBJHEAD_MAGIC);
-		cnt_deadline(req);
+		if (nxt == REQ_FSM_MORE)
+			cnt_deadline(req);
 	}
 	wrk->vsl = NULL;
 	if (nxt == REQ_FSM_DONE) {
