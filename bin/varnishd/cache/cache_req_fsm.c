@@ -1118,7 +1118,7 @@ cnt_deadline(struct req *req)
 		(void)HSH_DerefObjCore(req->wrk, &req->body_oc, 0);
 	}
 	if (req->vary_b != NULL)
-		VRY_Finish(req, DISCARD);
+		VRY_Clear(req);
 	AZ(req->objcore);
 	AZ(req->stale_oc);
 	AZ(req->body_oc);
