@@ -1150,6 +1150,7 @@ CNT_Request(struct req *req)
 	struct vrt_ctx ctx[1];
 	struct worker *wrk;
 	enum req_fsm_nxt nxt;
+	const struct req_step *pstp;
 
 	CHECK_OBJ_NOTNULL(req, REQ_MAGIC);
 
@@ -1184,10 +1185,13 @@ CNT_Request(struct req *req)
 		AN(req->req_step->func);
 		if (DO_DEBUG(DBG_REQ_STATE))
 			cnt_diag(req, req->req_step->name);
+		pstp = req->req_step;
 		nxt = req->req_step->func(wrk, req);
 		CHECK_OBJ_ORNULL(wrk->nobjhead, OBJHEAD_MAGIC);
-		if (nxt == REQ_FSM_MORE)
-			cnt_deadline(req);
+		if (nxt != REQ_FSM_MORE ||
+		    (DO_DEBUG(DBG_DEADLINE) && pstp == R_STP_RECV))
+			continue;
+		cnt_deadline(req);
 	}
 	wrk->vsl = NULL;
 	if (nxt == REQ_FSM_DONE) {
