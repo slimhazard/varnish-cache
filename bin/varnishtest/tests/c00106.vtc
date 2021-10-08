@@ -1,0 +1,31 @@
+varnishtest "timeout vs. VRY_Finish - needs injection to not check timeout after STP-RECV"
+
+varnish v1 -arg "-p req_total_timeout=0.1 -p debug=+req_state,+deadline" -vcl {
+	import vtc;
+
+	backend proforma none;
+
+	sub vcl_hash {
+		if (req.http.delay) {
+			vtc.sleep(0.2s);
+		}
+	}
+
+	sub vcl_backend_error {
+		set beresp.status = 200;
+		set beresp.http.Vary = "foo";
+		set beresp.ttl = 1m;
+		set beresp.uncacheable = true;
+		return (deliver);
+	}
+} -start
+
+client c1 {
+	txreq
+	rxresp
+	expect resp.status == 200
+
+	txreq -hdr "delay: 1"
+	rxresp
+	expect resp.status == 503
+} -run
