@@ -1,0 +1,87 @@
+varnishtest "ESI with and without maxwait"
+
+# Verifies that the maxwait value is reset for a new ESI include.
+
+server s1 {
+	rxreq
+	txresp -body {
+		<html>
+		Before includes
+		<esi:include src="/body1" maxwait="500"/>
+		Between includes
+		<esi:include src="/body2"/>
+		After includes
+		</html>
+	}
+	rxreq
+	delay 1.1
+	txresp -body {
+		Included file
+	}
+} -start
+
+server s2 {
+	rxreq
+	expect req.url == "/body1"
+	txresp -body {
+		Include from s2
+	}
+} -start
+
+server s3 {
+	rxreq
+	expect req.url == "/body2"
+	delay 0.6
+	txresp -body {
+		Include from s3
+	}
+} -start
+
+varnish v1 -vcl+backend {
+	sub vcl_recv {
+		if (req.esi_level == 0) {
+			set req.backend_hint = s1;
+		}
+		elsif (req.url == "/body1") {
+			set req.backend_hint = s2;
+		}
+		else {
+			set req.backend_hint = s3;
+		}
+	}
+
+	sub vcl_backend_response {
+		set beresp.do_esi = true;
+	}
+} -start
+
+client c1 {
+	txreq
+	rxresp
+	expect resp.status == 200
+	expect resp.body == {
+		<html>
+		Before includes
+		
+		Include from s2
+	
+		Between includes
+		
+		Include from s3
+	
+		After includes
+		</html>
+	}
+} -run
+
+logexpect l1 -v v1 -d 1 -q {BereqURL ~ "/body"} {
+	expect 0 *	Begin        {^bereq \d+ fetch}
+	expect * =	BereqURL     ^/body
+	expect * =	BerespStatus 200
+	expect * =	End
+
+	expect 0 *	Begin        {^bereq \d+ fetch}
+	expect * =	BereqURL     ^/body
+	expect * =	BerespStatus 200
+	expect * =	End
+} -run

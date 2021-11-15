@@ -408,6 +408,8 @@ ved_vdp_esi_bytes(struct vdp_ctx *vdx, enum vdp_action act, void **priv,
 				ved_include(ecx->preq,
 				    (const char*)q, (const char*)ecx->p, ecx);
 				Debug("INCL [%s][%s] END\n", q, ecx->p);
+				/* Reset maxwait before the next ESI. */
+				ecx->maxwait = 0;
 				ecx->p = r + 1;
 				break;
 			default:
