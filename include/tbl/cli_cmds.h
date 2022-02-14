@@ -361,10 +361,10 @@ CLI_CMD(DEBUG_REQPOOLFAIL,
 )
 CLI_CMD(DEBUG_XID,
 	"debug.xid",
-	"debug.xid",
-	"Examine or set XID.",
+	"debug.xid [<xid> [<cachesize>]}",
+	"Examine or set XID. <cachesize> defaults to 1.",
 	"",
-	0, 1
+	0, 2
 )
 
 CLI_CMD(DEBUG_SRANDOM,
